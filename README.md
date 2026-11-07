@@ -39,7 +39,7 @@ python3 tools/check.py
 python3 -m http.server 8000 --directory docs
 ```
 
-Open `http://localhost:8000`. The generated `docs/` folder is self-contained and uses no CDN. Edit `chapters/*.md` and `ABOUT.md`, rebuild, and commit the source and generated pages together. Do not rerun the historical authoring script; chapters are now the source of truth.
+Open `http://localhost:8000`. The generated `docs/` folder is self-contained and uses no CDN. Edit `chapters/*.md` and `ABOUT.md`, rebuild, and commit the source and generated pages together.
 
 ## GitHub Pages
 

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memory access and synchronization · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="active" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 03 / 15 <span>5 answered questions</span></div><h1 id="memory-access-and-synchronization">Memory access and synchronization</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>Look at addresses across lanes of the <strong>same instruction</strong> when reasoning about coalescing. Alignment, access width, and address spacing determine transaction demand. Structure-of-arrays layouts often help when neighboring threads need the same field from neighboring records. Vectorized loads need appropriate alignment and supported types.</p>
+<p>Shared-memory accesses have bank behavior; bank conflicts are different from global-memory coalescing. Padding or swizzling can change bank mapping. Warp shuffles exchange register values among participating lanes. Participation masks and active lanes are part of correctness.</p>
+<p>Synchronization has scope: a block barrier coordinates a block, a warp primitive coordinates participating lanes, a memory fence orders relevant memory operations, and host synchronization waits for device work. They are not substitutes for one another. Independent thread scheduling makes implicit warp lockstep an unsafe general synchronization assumption.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="031-intermediate-can-each-thread-read-consecutive-elements-yet-produce-poor-coalescing">03.1 · Intermediate · Can each thread read consecutive elements yet produce poor coalescing?</h3>
+<p><strong>Before you answer — Same-thread sequential access is not the definition of coalescing.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Yes. If each lane starts a distant chunk, the first load instruction touches widely separated addresses even though each lane advances sequentially. Examine the cross-lane pattern for each instruction.</p>
+<p><strong>Common mistake:</strong> Checking only the loop inside one thread.</p>
+</details>
+<h3 id="032-intermediate-why-is-a-transpose-tile-often-declared-as-float-tile3233">03.2 · Intermediate · Why is a transpose tile often declared as float tile[32][33]?</h3>
+<p><strong>Before you answer — Bank mapping depends on access pattern, word size, and architecture.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>In a common 32-bank, four-byte-word model, padding changes the row stride so a column read no longer sends distinct words to the same bank. It is a technique for that access pattern, not a universal prescription for all types or layouts. Same-address broadcast is a separate case.</p>
+<p><strong>Common mistake:</strong> Adding one column everywhere without analyzing the actual mapping.</p>
+</details>
+<h3 id="033-foundation-can-__syncthreads-be-inside-if-threadidxx-16">03.3 · Foundation · Can __syncthreads() be inside if (threadIdx.x &lt; 16)?</h3>
+<p><strong>Before you answer — A barrier must be reached consistently by the participating group.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Not as a block-wide barrier when other live block threads skip it. Arrange a uniform barrier and predicate the data work instead. A warp-scoped primitive can be appropriate only when its participation requirements are satisfied.</p>
+<p><strong>Common mistake:</strong> Treating a barrier as a local wait for only the calling thread.</p>
+</details>
+<h3 id="034-intermediate-does-atomicadd-synchronize-every-block">03.4 · Intermediate · Does atomicAdd synchronize every block?</h3>
+<p><strong>Before you answer — An atomic operation is indivisible for its target operation.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>No. It does not make every block arrive at a common point or establish a general grid barrier. A separate kernel launch in an appropriately ordered stream is often a simple way to separate dependent global phases.</p>
+<p><strong>Common mistake:</strong> Confusing an atomic update with global phase completion.</p>
+</details>
+<h3 id="035-advanced-how-should-i-approach-cpasync-tma-warp-specialization-and-newer-tensor-core-instructions">03.5 · Advanced · How should I approach cp.async, TMA, warp specialization, and newer Tensor Core instructions?</h3>
+<p><strong>Before you answer — Asynchronous copy and matrix features have architecture-specific contracts.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>First identify the target architecture and supported instruction set. Then specify producer/consumer roles, buffers, arrival/completion barriers, and storage lifetimes. Ampere asynchronous copies, Hopper TMA/warpgroup features, and Blackwell tensor-memory instructions require different programming contracts; an architecture-specific binary is not automatically portable.</p>
+<p><strong>Common mistake:</strong> Copying a specialized kernel to another target merely because both GPUs support CUDA.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html">CUDA advanced kernel programming</a></li>
+<li><a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">CUDA Best Practices Guide</a></li>
+</ul><div class="page-turn"><a href="02-execution-and-performance.html">← Previous chapter</a><a href="04-triton-and-operators.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

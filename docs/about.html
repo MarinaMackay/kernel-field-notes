@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About, sources, and coverage · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><h1>About this book</h1>
+<p>Kernel Field Notes is a free, question-led learning book about GPU programming and AI systems. It organizes personal study notes into explanations, worked calculations, questions, answers, and primary references. It makes no claim of a new research result or independent GPU benchmark.</p>
+<h2>How to read</h2>
+<p>Read <strong>Knowledge first</strong> before attempting the questions. Each question includes a specific concept reminder. Try answering, then expand the answer. Foundation questions test vocabulary and simple models; Intermediate questions test mechanisms and trade-offs; Advanced questions test assumptions, derivations, debugging, and design. These levels are editorial guidance, not standardized interview ratings.</p>
+<p>The structure is inspired by question-led technical books, including <a href="https://github.com/chiphuyen/ml-interviews-book">Chip Huyen's ML Interviews Book</a>. The prose and question answers here were assembled from the author's own notes with AI editing assistance; this is not a copy or an official extension of that book.</p>
+<h2>Coverage of the first edition</h2>
+<p>This is version 0.1: 15 chapters and 102 answered questions. It is a substantive first edition, not a claim that every original note has completed translation and verification.</p>
+<table>
+<thead>
+<tr>
+<th>Original note area</th>
+<th>Current treatment</th>
+<th>Remaining depth</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPU structure and memory</td>
+<td>Chapter 1</td>
+<td>Original embedded images not reused; no universal hardware-size table</td>
+</tr>
+<tr>
+<td>Execution, roofline, occupancy</td>
+<td>Chapters 2–3</td>
+<td>Architecture-specific limits and advanced instruction examples need separate versioned treatment</td>
+</tr>
+<tr>
+<td>Streams, events, asynchronous copies</td>
+<td>Chapter 6, questions 4–10</td>
+<td>More executable multi-stream examples</td>
+</tr>
+<tr>
+<td>Benchmarking, statistics, profiling</td>
+<td>Chapter 6, all 40 original article questions preserved</td>
+<td>GPU execution and independent reproduction remain unperformed</td>
+</tr>
+<tr>
+<td>Triton, strides, reductions, softmax, RMSNorm, GEMM, fusion, tuning</td>
+<td>Chapters 1 and 4</td>
+<td>Full runnable operator implementations and unit tests are not supplied yet</td>
+</tr>
+<tr>
+<td>Compiler/JIT, integration, graphs</td>
+<td>Chapters 5–6</td>
+<td>IR walkthroughs and version-pinned integration examples</td>
+</tr>
+<tr>
+<td>Correctness, numerical error, races</td>
+<td>Chapter 6, questions 24–27; chapters 4 and 15</td>
+<td>Executed sanitizer examples</td>
+</tr>
+<tr>
+<td>Reward hacking and trust</td>
+<td>Chapters 6–7</td>
+<td>Adversarial harness tests and threat-model implementation</td>
+</tr>
+<tr>
+<td>Workers, residency, timeouts, MPS/MIG</td>
+<td>Chapters 6–7</td>
+<td>Device-specific partition and recovery experiments</td>
+</tr>
+<tr>
+<td>Admission, queues, backpressure, fairness</td>
+<td>Chapters 6 and 8</td>
+<td>Trace-driven scheduling comparisons</td>
+</tr>
+<tr>
+<td>Serving, attention, KV, batching</td>
+<td>Chapter 9</td>
+<td>Detailed MLA, FP8 KV, Flash-Decoding, and engine-specific examples</td>
+</tr>
+<tr>
+<td>RL, PPO/GRPO, variants</td>
+<td>Chapters 11–12</td>
+<td>Full loss derivations, implementation-specific masks, and variant comparisons</td>
+</tr>
+<tr>
+<td>Kernel rewards and multi-turn training</td>
+<td>Chapter 13</td>
+<td>Executed end-to-end training configuration</td>
+</tr>
+<tr>
+<td>Papers, frameworks, public projects</td>
+<td>Chapter 14</td>
+<td>Individual recent-paper reading records and current API/CLI checks</td>
+</tr>
+<tr>
+<td>Estimates, code questions, distributed training, open design</td>
+<td>Chapters 10 and 15, with related questions in other chapters</td>
+<td>Complete executable CUDA reduction/transpose and Triton GEMM exercises</td>
+</tr>
+</tbody>
+</table>
+<p>The private editorial inventory retains the full original source notes, links, image references, and unresolved details. It is intentionally separate from this public repository: original Notion attachment URLs and unreviewed images are not distributed. No specific private-project architecture is described here.</p>
+<p>The remaining-paper queue from the notes includes CUDA Agent, SOL-ExecBench, daVinci-kernel, KernelOPT, Harness Engineering, and additional kernel-learning projects. Their note-level claims are not presented as verified paper results in this edition. Exact statistics, endpoints, model names, and revision-specific behavior must be checked against their original sources before a dedicated reading note is added.</p>
+<h2>Evidence and reproducibility</h2>
+<ul>
+<li>Worked estimates are calculations under explicit assumptions, not observed measurements.</li>
+<li>GPU timings quoted in Chapter 6 are attributed author-reported public examples. They have not been independently reproduced for this book.</li>
+<li>The timing appendix is educational. Python syntax and the static book were checked; CUDA execution was not.</li>
+<li>Hardware features and APIs depend on versions and targets. Linked documentation can change; use the versions matching your environment.</li>
+<li>There are no tracking scripts, subscriptions, or account requirements in the generated book.</li>
+</ul>
+<h2>Corrections</h2>
+<p>Please open a <a href="https://github.com/MarinaMackay/kernel-field-notes/issues">GitHub issue</a> with the chapter/question ID, the disputed statement, a counterexample or primary reference, and the relevant hardware/software version. Suggestions for missing knowledge or questions are welcome too.</p><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

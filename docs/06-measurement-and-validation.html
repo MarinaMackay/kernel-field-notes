@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Measurement, streams, correctness, and profiling · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="active" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 06 / 15 <span>40 answered questions</span></div><h1 id="measurement-streams-correctness-and-profiling">Measurement, streams, correctness, and profiling</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>A performance result is a claim about a specified workload, numerical contract, baseline, and measurement procedure. The knowledge sections below introduce each topic before its questions. Try answering before expanding the explanation. Public GPU results are attributed examples, not independent measurements for this book.</p>
+<h2 id="a-motivating-example-is-a-kernel-actually-faster">A motivating example: is a kernel actually faster?</h2>
+<p>A benchmark can change which GPU kernel wins without changing either kernel.</p>
+<p>In a public Triton report, the comparison below reverses after changing how the benchmark prepares the L2 cache:</p>
+<table>
+<thead>
+<tr>
+<th>Cache preparation</th>
+<th style="text-align: right;">cuBLAS BF16</th>
+<th style="text-align: right;">One Triton W8 configuration</th>
+<th>Lower latency</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Write-based flush</td>
+<td style="text-align: right;">46.1 μs</td>
+<td style="text-align: right;">43.0 μs</td>
+<td>W8</td>
+</tr>
+<tr>
+<td>Read-based flush</td>
+<td style="text-align: right;">33.8 μs</td>
+<td style="text-align: right;">38.9 μs</td>
+<td>cuBLAS</td>
+</tr>
+</tbody>
+</table>
+<p>The report attributes the difference to dirty cache lines: a subsequent kernel can pay for writing them back. The author tested A100 PCIe 40GB GPUs and provided reproducer code, profiling evidence, and limits. This is an author-reported result, not my independent reproduction, and it does not establish the same behavior on every architecture. See <a href="https://github.com/triton-lang/triton/issues/12554">Triton issue #12554</a>.</p>
+<p>That example motivated this guide. A useful speedup claim needs a definition of the work, a valid timer, comparable conditions, and evidence that the result survives another run.</p>
+<p>This article organizes my kernel-learning notes into explanations, worked examples, and questions to ask when reading or building a benchmark. It uses attributed public examples; it presents no new GPU measurements. Numerical examples labeled “illustrative” are calculations, not experimental results.</p>
+<h2 id="1-start-with-the-measurement-contract">1. Start with the measurement contract</h2>
+<p>“Faster than PyTorch” is not enough information to reproduce a comparison.</p>
+<p>Before comparing implementations, write down the operation, allowed inputs, numerical requirements, baseline, timed region, and execution mode. Keep eager PyTorch, warmed-up torch.compile, vendor libraries, and custom kernels identifiable.</p>
+<p>Precision is part of the contract. A BF16 or TF32 computation is not automatically an equivalent replacement for a stricter FP32 task. Likewise, a contiguous-only implementation does not replace an operator promising arbitrary supported strides.</p>
+<h3 id="the-different-clocks-in-a-kernel-project">The different clocks in a kernel project</h3>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>What it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Device execution interval</td>
+<td>How long does the selected GPU work take under this timing method?</td>
+</tr>
+<tr>
+<td>Host launch overhead</td>
+<td>How much host-side work is needed to submit operations?</td>
+</tr>
+<tr>
+<td>Evaluation wall time</td>
+<td>How long do preparation, compilation, checks, execution, and reporting take?</td>
+</tr>
+<tr>
+<td>Search wall time</td>
+<td>How long does candidate generation plus the evaluation process take?</td>
+</tr>
+<tr>
+<td>Application latency</td>
+<td>How long does the user-visible operation or request take?</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>How many operations, candidates, requests, or tokens complete per unit time?</td>
+</tr>
+<tr>
+<td>Goodput</td>
+<td>How much valid, useful work completes per unit time under stated requirements?</td>
+</tr>
+</tbody>
+</table>
+<p>These quantities should not share an unlabeled “latency” column. An evaluation service can spend seconds compiling and checking a candidate whose kernel takes microseconds.</p>
+<h3 id="061-foundation-can-throughput-improve-while-latency-gets-worse">06.1 · Foundation · Can throughput improve while latency gets worse?</h3>
+<p><strong>Before you answer — Batching, throughput, latency, and goodput describe different objectives.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Yes. A larger batch may finish more requests per second while each request waits longer. Define the unit, concurrency, and latency objective. In a kernel-search service, report valid and correct candidate rates alongside raw evaluation throughput.</p>
+</details>
+<h3 id="062-foundation-which-baseline-should-i-use">06.2 · Foundation · Which baseline should I use?</h3>
+<p><strong>Before you answer — A baseline defines the meaning of a speedup.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Use the implementation relevant to the claim. If the intended deployment uses torch.compile, an eager-only comparison leaves a question unanswered. Include both when useful, with their own warmup and configuration. Match allocation behavior, precision, supported inputs, and graph mode—or explicitly explain the difference.</p>
+</details>
+<h3 id="063-foundation-does-changing-precision-count-as-a-kernel-optimization">06.3 · Foundation · Does changing precision count as a kernel optimization?</h3>
+<p><strong>Before you answer — Precision changes the numerical contract.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>It can be a useful system optimization, but report the changed numerical contract. Readers need to distinguish a faster implementation of equivalent requirements from a speed/accuracy trade-off.</p>
+</details>
+<h2 id="2-submission-is-not-completion">2. Submission is not completion</h2>
+<p>A CUDA stream is an ordered queue of device work. The CPU can enqueue an operation and continue before the GPU finishes it. Operations on different streams can overlap when dependencies and hardware permit; concurrency is not guaranteed.</p>
+<p>A host timestamp taken immediately after an asynchronous call may mostly describe submission.</p>
+<p>The <a href="https://docs.pytorch.org/tutorials/recipes/recipes/benchmark.html">PyTorch benchmark tutorial</a> provides a concrete example. Its unsynchronized timeit output reports about 25.3 μs for a warmed-up mul/sum operation, while torch.utils.benchmark reports about 232.9 μs for that operation. The tutorial explains synchronization and first-use effects. These are historical example outputs from its environment, not expected results for your hardware.</p>
+<h3 id="two-timing-boundaries">Two timing boundaries</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Boundary</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unsynchronized host timer</td>
+<td>CPU submits work, then reads the clock</td>
+<td>Does not establish GPU completion</td>
+</tr>
+<tr>
+<td>Synchronized host timer</td>
+<td>Drain earlier work; start; submit; wait; stop</td>
+<td>Host-observed interval including submission and waiting</td>
+</tr>
+<tr>
+<td>CUDA events</td>
+<td>Record events in a correctly ordered device stream</td>
+<td>Elapsed device timeline interval; may include gaps and contention</td>
+</tr>
+</tbody>
+</table>
+<h3 id="064-foundation-how-are-cuda-event-and-perf_counter-different">06.4 · Foundation · How are CUDA Event and perf_counter different?</h3>
+<p><strong>Before you answer — Host and device clocks observe different timelines.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>An event marks the device timeline. A host timer measures elapsed host time. Use synchronization before and after the host-timed region to exclude pending earlier work and wait for measured work. With events, wait for the ending event before reading elapsed_time; PyTorch reports milliseconds.</p>
+</details>
+<h3 id="065-intermediate-does-a-cuda-event-give-pure-kernel-execution-time">06.5 · Intermediate · Does a CUDA Event give pure kernel execution time?</h3>
+<p><strong>Before you answer — A device interval can include gaps and contention.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Not unconditionally. A gap between events and work, other work in the measured stream, or contention can affect the interval. Tiny kernels can expose host submission gaps. Repeated launches or graph replay can help answer particular questions, but change the execution setup and must be labeled.</p>
+<p>Speechmatics discusses these subtleties, with code and timeline illustrations, in <a href="https://blog.speechmatics.com/cuda-timings">How to Accurately Time CUDA Kernels in PyTorch</a>.</p>
+</details>
+<h3 id="066-foundation-why-can-item-printing-or-copying-to-cpu-change-the-timing">06.6 · Foundation · Why can .item(), printing, or copying to CPU change the timing?</h3>
+<p><strong>Before you answer — CPU-visible CUDA values can introduce synchronization.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Reading a CUDA value on the CPU can force synchronization. Calls such as .item(), .tolist(), printing tensor values, and a blocking CPU copy may surface previously queued work. A suddenly slow line is not necessarily where the expensive computation originated.</p>
+</details>
+<h3 id="067-intermediate-what-if-a-candidate-launches-work-on-a-side-stream">06.7 · Intermediate · What if a candidate launches work on a side stream?</h3>
+<p><strong>Before you answer — A timing boundary must depend on every contributing stream.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>The ending event must depend on completion of every contributing stream. A timeline that ends before the side-stream output is ready can undercount the operation. Establish both input readiness before side-stream work and completion before the timing boundary.</p>
+</details>
+<h3 id="068-intermediate-are-wait_stream-record_stream-and-synchronize-interchangeable">06.8 · Intermediate · Are wait_stream(), record_stream(), and synchronize() interchangeable?</h3>
+<p><strong>Before you answer — Execution dependencies and allocation lifetimes are distinct.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Stream waits establish dependencies for subsequently submitted work. Synchronization waits on the host. record_stream() informs the allocator about tensor use on another stream; it is not a substitute for an execution dependency. The stream rules and allocator interaction are documented in <a href="https://docs.pytorch.org/docs/2.15/notes/cuda.html">PyTorch CUDA semantics</a>.</p>
+</details>
+<h3 id="069-intermediate-does-non_blockingtrue-guarantee-a-transfer-overlaps-computation">06.9 · Intermediate · Does non_blocking=True guarantee a transfer overlaps computation?</h3>
+<p><strong>Before you answer — Asynchronous submission does not guarantee overlap.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Useful overlap depends on the transfer, memory type, streams, dependencies, and device capabilities. Pinned host memory can enable efficient asynchronous transfers, but the flag alone does not prove overlap. Verify the intended timeline.</p>
+</details>
+<h3 id="0610-intermediate-should-i-benchmark-with-cuda_launch_blocking1">06.10 · Intermediate · Should I benchmark with CUDA_LAUNCH_BLOCKING=1?</h3>
+<p><strong>Before you answer — Debugging settings can change benchmark behavior.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Use it for debugging asynchronous failures when appropriate, not as an unnoticed benchmark setting. It changes execution behavior. Also distinguish a GPU block barrier such as __syncthreads() from a host device synchronization: they operate at different scopes.</p>
+</details>
+<h2 id="3-warmup-compilation-and-graphs-answer-different-questions">3. Warmup, compilation, and graphs answer different questions</h2>
+<p>The first call may initialize a CUDA context, load libraries or modules, compile a specialization, allocate memory, or run autotuning. A steady-state measurement deliberately answers a different question from startup latency.</p>
+<p>Report compilation/autotuning, first invocation, and steady state separately when each matters. Warm up the actual shape, dtype, layout, and mode being measured; one warmup input does not establish that every later specialization is already compiled.</p>
+<h3 id="0611-intermediate-is-a-cold-worker-the-same-as-a-cold-cache">06.11 · Intermediate · Is a cold worker the same as a cold cache?</h3>
+<p><strong>Before you answer — First-use work, persistent workers, and cache state are separate.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. A worker can have an initialized context and compiled modules while the relevant data is absent from cache. Conversely, a warm worker can retain buffers, allocator state, and other state that affects evaluation. Describe initialization state and data-cache state separately.</p>
+</details>
+<h3 id="0612-intermediate-how-do-torchcompile-and-cuda-graphs-differ">06.12 · Intermediate · How do torch.compile and CUDA Graphs differ?</h3>
+<p><strong>Before you answer — Compilation and graph replay change different costs.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Compilation can transform an operation graph and generate or select implementations, including fusion. CUDA Graph replay reduces repeated submission overhead for a captured workflow; it does not by itself turn the underlying kernels into faster algorithms. Some compile configurations use graph replay when applicable. Record what actually happened, including graph breaks or recompilation.</p>
+</details>
+<h3 id="0613-intermediate-what-should-i-check-if-graph-replay-is-still-slow">06.13 · Intermediate · What should I check if graph replay is still slow?</h3>
+<p><strong>Before you answer — Capture reuses execution assumptions.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Check whether the time includes input copies, repeated capture, dynamic shapes, fallback regions, or work outside the graph. Static buffers also make address reuse explicit. Compare ordinary launches and replay separately rather than giving one implementation a different mode without saying so.</p>
+</details>
+<h3 id="0614-intermediate-what-do-benchmark-helpers-handle-and-what-do-i-still-own">06.14 · Intermediate · What do benchmark helpers handle, and what do I still own?</h3>
+<p><strong>Before you answer — Specialization and tuning determine which code runs.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>PyTorch's benchmark Timer handles warmup and accelerator synchronization when needed. It also controls CPU thread settings, which can matter in mixed workloads. blocked_autorange selects a block size to amortize measurement overhead and collects repeated measurements.</p>
+<p>Triton's do_bench returns milliseconds and exposes warmup, repetition, quantiles, and summary modes. Its current documentation describes warmup and rep as time budgets in milliseconds, not counts. Specify median or requested quantiles explicitly instead of assuming defaults. You still own the operation contract, cache policy, stream dependencies, environment, and output validation. See <a href="https://docs.pytorch.org/docs/2.15/benchmark_utils.html">PyTorch benchmark utilities</a> and <a href="https://triton-lang.org/main/python-api/generated/triton.testing.do_bench.html">Triton do_bench</a>.</p>
+<p>Autotuning executes candidates. For kernels that mutate buffers, reset or restore state between trials; otherwise, tuning can change the input to later trials. Record tuning cost and cache keys. A compiled-cache hit is not proof that a new input was validated.</p>
+</details>
+<h2 id="4-cold-cache-needs-a-procedure">4. “Cold cache” needs a procedure</h2>
+<p>GPU data can be served through caches rather than device DRAM. Reusing the same buffers may produce a different workload from cycling through a larger working set.</p>
+<p>Choose the experiment to match the application. Record working-set size, address reuse, attempted eviction, and what belongs inside the timing boundary. Keep policy comparable for the baseline and candidate.</p>
+<h3 id="0615-intermediate-should-every-benchmark-flush-l2">06.15 · Intermediate · Should every benchmark flush L2?</h3>
+<p><strong>Before you answer — Repeated addresses may reuse cache contents.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Warm reuse can be realistic; streaming fresh data can also be realistic. Neither is a universal default for every application. If you deliberately evict, describe the procedure and check the library version rather than assuming every helper has identical cache behavior.</p>
+</details>
+<h3 id="0616-intermediate-can-preparation-outside-the-timer-affect-the-interval-inside-it">06.16 · Intermediate · Can preparation outside the timer affect the interval inside it?</h3>
+<p><strong>Before you answer — Cache preparation is part of an experimental setup.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Yes. Preparation can change cache contents, dirty state, clocks, or allocator state. The opening Triton report illustrates why “outside the timed region” does not mean “without consequences.” Treat its architecture-specific evidence as a reason to inspect the setup, not a universal correction factor.</p>
+</details>
+<h3 id="0617-intermediate-are-cache-hits-and-coalesced-accesses-the-same-thing">06.17 · Intermediate · Are cache hits and coalesced accesses the same thing?</h3>
+<p><strong>Before you answer — Cache reuse, coalescing, and banks describe different mechanisms.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Cache behavior concerns where requested data is found. Coalescing concerns how addresses requested by lanes are serviced in memory transactions. Identical useful bytes do not guarantee identical transferred bytes. Shared-memory bank conflicts are a separate issue again.</p>
+<p>This distinction matters when interpreting effective bandwidth: state which bytes you counted and which level of the memory system you mean.</p>
+</details>
+<h3 id="0618-intermediate-do-fixed-clocks-remove-all-noise">06.18 · Intermediate · Do fixed clocks remove all noise?</h3>
+<p><strong>Before you answer — Hardware operating conditions can change observed latency.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Clock controls, when available and permitted, help control one variable. Thermal conditions, power limits, competing processes, and the benchmark sequence still matter. Record the clock policy and observed conditions; a configured limit is not evidence that every run sustained it.</p>
+</details>
+<h2 id="5-statistics-a-winning-sample-is-a-hypothesis">5. Statistics: a winning sample is a hypothesis</h2>
+<p>For the illustrative samples 5, 5, 5, 5, and 30 μs, the minimum and median are 5 μs, while the mean is 10 μs. Each statistic answers a different question.</p>
+<p>Store raw measurements and explain their sampling unit. A percentile across averages of many launches is not the same as a percentile across individual request latencies. Five samples are not a convincing basis for a tail-latency claim.</p>
+<h3 id="0619-intermediate-why-interleave-ab-measurements">06.19 · Intermediate · Why interleave A/B measurements?</h3>
+<p><strong>Before you answer — Measurement order can correlate with drift.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Always measuring A first and B later can correlate implementation with temperature, clocks, or system load. Alternating or randomized paired blocks can reduce order bias. An A–B–B–A sequence is one practical pattern; it does not fix unequal warmup or cache policy.</p>
+</details>
+<h3 id="0620-advanced-why-independently-retest-the-winner">06.20 · Advanced · Why independently retest the winner?</h3>
+<p><strong>Before you answer — Searching many noisy candidates introduces selection bias.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Search selects from noisy observations. Trying many configurations increases the opportunity to select one that benefited from favorable noise. Freeze the source and configuration, then repeat baseline and winner measurements in a fresh confirmation stage.</p>
+<p>A candidate observed at 1.201× but subsequently measured at 1.196×, 1.202×, and 1.197× has not demonstrated a stable margin above 1.20×.</p>
+</details>
+<h3 id="0621-foundation-why-use-the-geometric-mean-of-speedups">06.21 · Foundation · Why use the geometric mean of speedups?</h3>
+<p><strong>Before you answer — Multiplicative ratios need an appropriate aggregation.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>For positive task speedups S_i, the geometric mean is exp(mean(log(S_i))). An illustrative 2× improvement and 0.5× regression give a geometric mean of 1×; the arithmetic mean gives 1.25×.</p>
+<p>The geometric mean does not describe total application runtime, and it does not tell you how to score failures. Report task coverage and the failure policy explicitly.</p>
+</details>
+<h3 id="0622-intermediate-how-does-speedup-differ-from-fast_p">06.22 · Intermediate · How does speedup differ from fast_p?</h3>
+<p><strong>Before you answer — Task-level speedup and suite-level success rate differ.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>A task's speedup is baseline time divided by candidate time. KernelBench's fast_p summarizes the fraction of tasks whose candidates are correct and exceed the speed threshold p. Failed tasks remain part of the suite denominator. Reporting only successful-task speedups can hide how often a method fails. State the baseline and suite version. See <a href="https://github.com/ScalingIntelligence/KernelBench">KernelBench</a>.</p>
+</details>
+<h3 id="0623-advanced-does-trying-more-candidates-mean-the-model-learned">06.23 · Advanced · Does trying more candidates mean the model learned?</h3>
+<p><strong>Before you answer — Search and learning are different procedures.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Not necessarily. Best-of-N selection or iterative prompting can improve the selected program without changing model weights. In RL, noisy or invalid measurements also affect the learning signal. Keep candidate failures separate from infrastructure-invalid evaluations, and keep model selection separate from held-out testing. Changing only a random seed does not establish generalization across task families, shapes, dtypes, or hardware.</p>
+</details>
+<h2 id="6-correctness-is-part-of-the-performance-claim">6. Correctness is part of the performance claim</h2>
+<p>Before timing, define what counts as the same operation. For a numerical comparison, a common form is:</p>
+<p>$$
+|y-y_{\mathrm{ref}}| \leq \mathrm{atol}+\mathrm{rtol}|y_{\mathrm{ref}}|.
+$$</p>
+<p>This formula does not choose the tolerance for you. Base it on the dtype, operation, accumulation, and application. Near zero, absolute tolerance matters; at larger magnitudes, the relative term grows.</p>
+<p>Check supported shape, dtype, stride, layout, and boundary cases. Test tails that are not multiples of a tile, small and empty inputs when supported, sign and magnitude variation, repeated indices where relevant, and the specified NaN/Inf behavior.</p>
+<h3 id="0624-intermediate-why-isnt-one-random-input-enough">06.24 · Intermediate · Why isn't one random input enough?</h3>
+<p><strong>Before you answer — A test suite samples a declared input contract.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>It can miss unwritten output elements, indexing assumptions, numerically difficult inputs, and race conditions. Initialize fully written output buffers with a recognizable poison value, compare full outputs, and preserve input copies when mutation is forbidden. A matching sum can conceal compensating errors.</p>
+</details>
+<h3 id="0625-foundation-does-allclose-mean-bitwise-equality">06.25 · Foundation · Does allclose mean bitwise equality?</h3>
+<p><strong>Before you answer — Numerical closeness is not bitwise equality.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Floating-point addition is not associative, so a changed reduction order can change low bits. Bitwise equality, numerical closeness, and deterministic execution are distinct requirements. An assert_close check can also enforce shape, dtype, and device expectations depending on its options.</p>
+</details>
+<h3 id="0626-intermediate-is-a-race-just-ordinary-nondeterminism">06.26 · Intermediate · Is a race just ordinary nondeterminism?</h3>
+<p><strong>Before you answer — Race freedom and deterministic rounding are distinct.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. A valid floating-point atomic reduction can vary with addition order while meeting its numerical contract. An unsynchronized conflicting access can be a correctness bug. Repeated successful runs do not prove its absence. NVIDIA's <a href="https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html">Compute Sanitizer</a> provides memory, race, initialization, and synchronization checks with documented scopes; no single check proves arbitrary candidate code correct.</p>
+</details>
+<h3 id="0627-intermediate-why-validate-the-benchmark-execution-path">06.27 · Intermediate · Why validate the benchmark execution path?</h3>
+<p><strong>Before you answer — Checking one path does not validate another path.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Generated code can behave differently during a separate correctness check and the timed call. Validate outputs from the same execution path used for measurement, with validation work outside the timed interval and a stated sampling policy. Fresh inputs, output buffers, addresses, and processes can reveal unwanted reuse or state dependence.</p>
+</details>
+<h3 id="0628-advanced-how-is-reward-hacking-different-from-overfitting">06.28 · Advanced · How is reward hacking different from overfitting?</h3>
+<p><strong>Before you answer — The evaluator must enforce its own trust boundary.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Overfitting means doing well on observed tasks and poorly on new ones. Reward hacking exploits the evaluator or metric: for example, returning stale results, changing timer behavior, or leaving work outside the measured dependency chain. The categories can overlap.</p>
+<p>Keep reference computation, input generation, timing, and scoring under trusted evaluator control. Static scans alone are not sufficient. The <a href="https://arxiv.org/html/2507.11948v1">Kevin paper</a> discusses reward-hacking problems in generated-kernel evaluation.</p>
+</details>
+<h2 id="7-profile-to-explain-a-valid-result">7. Profile to explain a valid result</h2>
+<p>Use a timeline to locate the expensive region, then inspect the relevant kernels. <a href="https://docs.nvidia.com/nsight-systems/UserGuide/index.html">Nsight Systems</a> helps relate CPU activity, GPU kernels, copies, and stream gaps. <a href="https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html">Nsight Compute</a> examines kernel-level behavior such as memory traffic, registers, occupancy, and stalls.</p>
+<p>Profiling can perturb execution. Metric collection can replay work or control cache and clocks. A profiled duration and an ordinary benchmark duration are different observations unless you establish comparable conditions.</p>
+<h3 id="0629-intermediate-how-do-i-tell-memory-bound-from-compute-bound">06.29 · Intermediate · How do I tell memory-bound from compute-bound?</h3>
+<p><strong>Before you answer — Arithmetic intensity relates work to data movement.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Start with an estimate of arithmetic intensity:</p>
+<p>$$
+AI=\frac{\mathrm{FLOPs}}{\mathrm{Bytes}}, \qquad
+P \leq \min(P_{\mathrm{peak}}, B_{\mathrm{mem}}AI).
+$$</p>
+<p>Specify the precision and memory level used in that model. For illustrative FP32 vector addition, two reads and one write imply 12 useful bytes and one floating-point addition per element: AI ≈ 1/12 FLOP/byte. This suggests a bandwidth limit for large streaming inputs, not a complete model of launch overhead or cached tiny inputs.</p>
+<p>Low compute and memory utilization do not uniquely diagnose “latency-bound.” Inspect dependencies, available parallelism, launch gaps, access patterns, and the meaning of the counters. NVIDIA discusses performance analysis and its limits in the <a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">CUDA Best Practices Guide</a>.</p>
+</details>
+<h3 id="0630-intermediate-why-can-a-bigger-tile-or-higher-occupancy-make-a-kernel-slower">06.30 · Intermediate · Why can a bigger tile or higher occupancy make a kernel slower?</h3>
+<p><strong>Before you answer — A tile trades reuse against resource demand.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>A larger tile can improve reuse while using more registers and shared memory, reducing residency or causing spills. Higher occupancy can help hide latency, but is not an objective by itself. Instruction-level parallelism, synchronization, and useful work still matter. Compare theoretical resource-limited occupancy with achieved occupancy, then test a specific hypothesis.</p>
+</details>
+<h3 id="0631-intermediate-what-do-stall-reasons-tell-me">06.31 · Intermediate · What do stall reasons tell me?</h3>
+<p><strong>Before you answer — Profiling counters require architecture and metric context.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>They suggest where eligible progress is being delayed, not an automatic fix. Long Scoreboard often points toward dependencies on L1TEX-serviced operations; Short Scoreboard toward MIO-related dependencies such as shared memory; Barrier toward synchronization. Math-pipeline pressure and Not Selected need context. Names and interpretations are architecture/tool dependent.</p>
+<p>Do not optimize the largest stall percentage without checking whether it limits overall progress. Return to an ordinary benchmark after the change.</p>
+</details>
+<h3 id="0632-intermediate-does-fusion-always-help">06.32 · Intermediate · Does fusion always help?</h3>
+<p><strong>Before you answer — Fusion trades intermediate traffic for a changed kernel.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>It can reduce launches and intermediate traffic, but can increase register pressure, synchronization, or code complexity, and may replace a better specialized implementation. Test the full region. A locally faster kernel can leave the application unchanged or slower.</p>
+</details>
+<h2 id="8-the-machine-and-evaluator-are-part-of-the-experiment">8. The machine and evaluator are part of the experiment</h2>
+<p>An initialized worker saves startup overhead but retains state. Two subprocesses can share physical GPU resources even when their address spaces and CUDA contexts differ.</p>
+<h3 id="0633-advanced-does-subprocess-isolation-make-timings-independent">06.33 · Advanced · Does subprocess isolation make timings independent?</h3>
+<p><strong>Before you answer — Process, performance, and security isolation differ.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>No. Processes can contend for SMs, cache, memory bandwidth, and copy engines. A subprocess helps contain some failures and supports worker recovery; it is not automatically a secure sandbox for arbitrary generated code.</p>
+<p>For controlled kernel latency, avoid unrelated GPU work or use a deliberately specified partition. Document MPS or MIG configuration. <a href="https://docs.nvidia.com/deploy/mps/latest/index.html">MPS</a> supports CUDA multiprocess sharing and resource controls; <a href="https://docs.nvidia.com/datacenter/tesla/mig-user-guide/introduction.html">MIG</a> partitions supported hardware resources. A partition's score should not be silently compared with a whole-device score.</p>
+</details>
+<h3 id="0634-advanced-what-should-happen-after-a-timeout-oom-or-device-failure">06.34 · Advanced · What should happen after a timeout, OOM, or device failure?</h3>
+<p><strong>Before you answer — Failure attribution is part of an evaluation result.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Classify queue timeout, compilation timeout, execution timeout, initialization failure, and device failure separately. An unavailable GPU is not evidence that the candidate is numerically wrong. After a context-poisoning error, retire the affected worker rather than trusting subsequent results.</p>
+<p>Retain enough information to retry infrastructure-invalid evaluations without silently rewarding or penalizing a candidate for a machine fault.</p>
+</details>
+<h3 id="0635-intermediate-why-can-memory_reserved-stay-high-after-tensors-are-freed">06.35 · Intermediate · Why can memory_reserved stay high after tensors are freed?</h3>
+<p><strong>Before you answer — Cache capacity must account for bytes and lifetimes.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Allocator reservations and live tensor allocations describe different things. References and allocator pools can retain memory. Record relevant memory state and apply a deliberate worker-reuse policy instead of assuming every trial starts identically. Limit caches by bytes as well as entry count when objects vary greatly in size.</p>
+</details>
+<h3 id="0636-intermediate-if-a-job-took-five-seconds-was-the-kernel-running-for-five-seconds">06.36 · Intermediate · If a job took five seconds, was the kernel running for five seconds?</h3>
+<p><strong>Before you answer — Queues couple throughput to waiting time.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Not necessarily. Separate queue wait, compilation, initialization, checks, device execution, and reporting. Admission control, backpressure, concurrency limits, and stragglers affect service latency and throughput.</p>
+<p>Under stable long-run conditions, Little's Law relates average in-system jobs L, arrival rate λ, and average time in system W: L = λW. An illustrative rate of 2 jobs/s and 10 s average sojourn time gives 20 jobs in the system, including waiting and service. It does not measure kernel execution.</p>
+</details>
+<h2 id="9-translate-a-kernel-result-into-a-useful-decision">9. Translate a kernel result into a useful decision</h2>
+<h3 id="0637-foundation-why-doesnt-a-2-faster-kernel-make-the-whole-model-2-faster">06.37 · Foundation · Why doesn't a 2× faster kernel make the whole model 2× faster?</h3>
+<p><strong>Before you answer — Amdahl’s law limits end-to-end benefits.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>In an illustrative 100 ms application, a 20 ms component reduced to 10 ms yields 90 ms overall: about 1.11×. Under Amdahl's simplified fixed-work assumptions,</p>
+<p>$$
+S_{\mathrm{total}}=\frac{1}{(1-f)+f/s}.
+$$</p>
+<p>With f = 0.2, even eliminating that component entirely caps the overall speedup at 1.25×. Real deployments can also change batching, memory pressure, communication, and scheduling, so measure end-to-end behavior as well.</p>
+</details>
+<h3 id="0638-intermediate-what-if-production-latency-suddenly-becomes-noisy">06.38 · Intermediate · What if production latency suddenly becomes noisy?</h3>
+<p><strong>Before you answer — Online latency includes more than kernel execution.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Check request mix, batch sizes, long contexts, KV-cache pressure, preemption, competing GPU work, clocks, host scheduling, and garbage collection before concluding that kernel code regressed. For serving, distinguish time to first token from inter-token latency and define which percentile and load you report.</p>
+</details>
+<h3 id="0639-intermediate-how-would-i-investigate-a-kernel-that-is-slower-than-expected">06.39 · Intermediate · How would I investigate a kernel that is slower than expected?</h3>
+<p><strong>Before you answer — Diagnosis begins by verifying the observation.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<ol>
+<li>Recheck output validity, the baseline, precision, timed region, synchronization, warmup, and cache policy.</li>
+<li>Estimate useful work, traffic, and a relevant performance bound.</li>
+<li>Inspect the application timeline for launch gaps, copies, and serialization.</li>
+<li>Inspect the kernel for resource use, access patterns, spills, dependencies, and contention.</li>
+<li>Change one hypothesis-driven factor.</li>
+<li>Recheck correctness and repeat the ordinary comparison, then independently confirm the selected result.</li>
+</ol>
+</details>
+<h3 id="0640-advanced-how-would-i-design-a-trustworthy-evaluation-service">06.40 · Advanced · How would I design a trustworthy evaluation service?</h3>
+<p><strong>Before you answer — An evaluation service needs a measurement contract and failure model.</strong></p>
+<details>
+<summary>Reveal answer</summary>
+<p>Use an admission-controlled queue, GPU workers, and a narrow candidate interface. Keep evaluator logic outside candidate control. Separate compilation work from controlled timing windows; use an explicit worker initialization and reuse policy.</p>
+<p>Generate reference inputs, preserve originals, validate supported cases, measure with correct dependencies, and inspect outputs from the benchmark path. Classify failures and recover damaged workers. Store source hash, configuration, environment, inputs or generation recipe, checks, raw timings, and confirmation results.</p>
+<p>For agent feedback, return useful compiler errors or numerical counterexamples rather than only “failed.” Track valid rate, correctness, unique candidates, and GPU-hours alongside throughput. If more GPUs become available, first identify whether generation, compilation, evaluation, or training is the actual bottleneck.</p>
+</details>
+<h2 id="a-reporting-checklist-to-copy">A reporting checklist to copy</h2>
+<ul>
+<li>[ ] Operation, supported inputs, layout, and numerical contract.</li>
+<li>[ ] Baseline implementation, precision, allocation behavior, and compilation/graph mode.</li>
+<li>[ ] Hardware, partition/sharing configuration, software versions, and source hash.</li>
+<li>[ ] Exact timing boundary and every contributing stream dependency.</li>
+<li>[ ] Startup, compilation/autotuning, first-call, and steady-state costs kept distinguishable.</li>
+<li>[ ] Warmup procedure, repetitions or time budget, units, and sampling unit.</li>
+<li>[ ] Buffer reuse, cache preparation, clock policy, and competing workloads.</li>
+<li>[ ] Edge-case and mutation checks, tolerances, full-output comparison, and failures.</li>
+<li>[ ] Raw samples, median, variability, aggregation, task coverage, and failure policy.</li>
+<li>[ ] Independent confirmation using frozen code and fresh evaluation state.</li>
+<li>[ ] Application-level impact, limitations, and instructions or links for reproduction.</li>
+</ul>
+<p>A speedup is useful when another reader can identify the work, reconstruct the conditions, and understand where the claim stops applying.</p>
+<h2 id="appendix-an-explicit-same-stream-timing-sketch">Appendix: an explicit same-stream timing sketch</h2>
+<p>This educational example keeps allocation and validation outside both intervals. It reuses the same buffers, does not deliberately evict caches, uses ordinary launches, and runs the two methods in separate phases. It is not a controlled comparison between different kernels. The phases and per-sample synchronization can change conditions; do not interpret their difference as an exact launch-overhead measurement.</p>
+<p>The script has been checked for Python syntax but has not been executed on a GPU for this article. It reports no expected timing values. For tiny operations, the event interval can still include submission gaps; use a purpose-built helper or an explicitly specified graph experiment when that is the question.</p>
+<pre><code class="language-python">import statistics
+from time import perf_counter
+import torch
+
+if not torch.cuda.is_available():
+    raise SystemExit(&quot;This example requires a CUDA-capable PyTorch environment.&quot;)
+
+a = torch.randn(1_000_003, device=&quot;cuda&quot;, dtype=torch.float32)
+b = torch.randn_like(a)
+out = torch.empty_like(a)
+
+def operation():
+    torch.add(a, b, out=out)
+
+for _ in range(100):
+    operation()
+torch.cuda.synchronize()
+torch.testing.assert_close(out, a + b)
+
+# One operation per sample, same-stream, repeated-buffer scenario.
+# Input/output allocation, validation, and warmup are outside the intervals.
+host_ms, event_ms = [], []
+for _ in range(30):
+    torch.cuda.synchronize()
+    t0 = perf_counter()
+    operation()
+    torch.cuda.synchronize()
+    host_ms.append((perf_counter() - t0) * 1e3)
+
+# Pre-create and initialize event objects outside the measured intervals.
+pairs = [(torch.cuda.Event(enable_timing=True),
+          torch.cuda.Event(enable_timing=True)) for _ in range(30)]
+for start, end in pairs:
+    start.record()
+    end.record()
+torch.cuda.synchronize()
+
+for start, end in pairs:
+    start.record()
+    operation()
+    end.record()
+    end.synchronize()
+    event_ms.append(start.elapsed_time(end))
+
+torch.testing.assert_close(out, a + b)
+print(&quot;host-observed median ms:&quot;, statistics.median(host_ms))
+print(&quot;event-interval median ms:&quot;, statistics.median(event_ms))
+</code></pre>
+<h2 id="sources-and-evidence-notes">Sources and evidence notes</h2>
+<p>The two numerical public examples are attributed above. All other numerical worked examples are illustrative. No new GPU experiment was run for this article, and the timing sketch or reasoning here should not be treated as a hardware-specific performance guarantee.</p>
+<ul>
+<li><a href="https://github.com/triton-lang/triton/issues/12554">Triton #12554: cache preparation and ranking reversal</a>. Author report opened October 30, 2026; open when checked for this article. Its findings are limited to the reported environment.</li>
+<li><a href="https://docs.pytorch.org/tutorials/recipes/recipes/benchmark.html">PyTorch benchmark tutorial</a>.</li>
+<li><a href="https://blog.speechmatics.com/cuda-timings">Speechmatics: How to Accurately Time CUDA Kernels in PyTorch</a>, March 28, 2023.</li>
+<li><a href="https://docs.pytorch.org/docs/2.15/notes/cuda.html">PyTorch CUDA semantics</a>, <a href="https://docs.pytorch.org/docs/2.15/benchmark_utils.html">benchmark utilities</a>, and <a href="https://docs.pytorch.org/docs/2.15/generated/torch.compile.html">torch.compile</a>.</li>
+<li><a href="https://triton-lang.org/main/python-api/generated/triton.testing.do_bench.html">Triton do_bench API</a>.</li>
+<li><a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">CUDA Best Practices Guide</a>.</li>
+<li><a href="https://docs.nvidia.com/nsight-systems/UserGuide/index.html">Nsight Systems User Guide</a> and <a href="https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html">Nsight Compute Profiling Guide</a>.</li>
+<li><a href="https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html">Compute Sanitizer</a>.</li>
+<li><a href="https://github.com/ScalingIntelligence/KernelBench">KernelBench</a> and <a href="https://arxiv.org/html/2507.11948v1">Kevin: Multi-Turn RL for Generating CUDA Kernels</a>.</li>
+<li><a href="https://docs.nvidia.com/deploy/mps/latest/index.html">NVIDIA MPS</a> and <a href="https://docs.nvidia.com/datacenter/tesla/mig-user-guide/introduction.html">MIG</a>.</li>
+</ul>
+<p>Written from personal learning notes with AI assistance for organization, English editing, and source lookup.</p><div class="page-turn"><a href="05-compilers-and-graphs.html">← Previous chapter</a><a href="07-trust-and-isolation.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

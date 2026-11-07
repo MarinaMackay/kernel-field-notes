@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PPO, GRPO, baselines, and policy lag · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="active" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 12 / 15 <span>5 answered questions</span></div><h1 id="ppo-grpo-baselines-and-policy-lag">PPO, GRPO, baselines, and policy lag</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>PPO uses a sampled-action likelihood ratio <code>rho = pi_new(a|s) / pi_old(a|s)</code>. Its clipped surrogate is <code>min(rho*A, clip(rho,1-epsilon,1+epsilon)*A)</code>. Clipping changes the incentive in the objective; it does not impose a hard global KL guarantee.</p>
+<p>GRPO estimates relative advantages using a group of responses to the same problem instead of a separately trained value model in the original formulation. A common form is <code>(reward - group_mean) / (group_std + epsilon)</code>. Implementations differ in normalization, token/sequence aggregation, clipping, and reference regularization; record the actual variant.</p>
+<p>A leave-one-out baseline excludes the current sample. A reference-model KL penalty and an old-policy likelihood ratio have different roles. Asynchronous rollouts introduce policy lag; training and inference can also disagree on token likelihoods. Version the policy and preserve the relevant sampling metadata.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="121-intermediate-compute-group-advantages-for-rewards-1001">12.1 · Intermediate · Compute group advantages for rewards [1,0,0,1].</h3>
+<p><strong>Before you answer — Specify population versus sample standard deviation.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>The mean is 0.5. Using population standard deviation gives 0.5, hence advantages <code>[1,-1,-1,1]</code> before epsilon. A sample-standard-deviation convention gives different magnitudes. An all-equal group has zero centered rewards and provides no relative reward signal under this estimator.</p>
+<p><strong>Common mistake:</strong> Leaving the standard-deviation convention unspecified in a worked example.</p>
+</details>
+<h3 id="122-advanced-how-does-r_i-meanother-rewards-relate-to-r_i-group_mean">12.2 · Advanced · How does r_i - mean(other rewards) relate to r_i - group_mean?</h3>
+<p><strong>Before you answer — For G&gt;1, leave-one-out centering changes scale.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Writing total reward as <code>G*mean</code>, the other-sample mean is <code>(G*mean-r_i)/(G-1)</code>. Subtraction gives <code>G/(G-1) * (r_i-mean)</code>. This relation concerns centering before any additional normalization.</p>
+<p><strong>Common mistake:</strong> Applying the relation to group size one or claiming it equates every full training objective.</p>
+</details>
+<h3 id="123-intermediate-do-ppo-clipping-and-a-reference-kl-penalty-do-the-same-thing">12.3 · Intermediate · Do PPO clipping and a reference KL penalty do the same thing?</h3>
+<p><strong>Before you answer — Old-policy proximity and reference-policy proximity are distinct.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>No. The likelihood ratio compares to the policy used to sample that action. A reference KL term typically compares to a chosen reference model. Neither guarantees all desirable behavior; tune and monitor the actual implemented objective, distributions, and update statistics.</p>
+<p><strong>Common mistake:</strong> Calling the frozen reference model and the rollout policy the same object.</p>
+</details>
+<h3 id="124-advanced-what-should-i-check-when-reading-dapo-or-dr-grpo">12.4 · Advanced · What should I check when reading DAPO or Dr. GRPO?</h3>
+<p><strong>Before you answer — Loss aggregation can alter length and difficulty weighting.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Compare the exact objectives and implementation: sampling/filtering of groups, upper/lower ratio clipping, reward standardization, token versus sequence aggregation, and length treatment. DAPO and Dr. GRPO motivate changes to these mechanisms; a variant name alone is insufficient to reproduce an update.</p>
+<p><strong>Common mistake:</strong> Explaining every long-response bias using only one normalization choice without inspecting the objective.</p>
+</details>
+<h3 id="125-advanced-what-if-every-response-in-a-grpo-group-has-the-same-reward">12.5 · Advanced · What if every response in a GRPO group has the same reward?</h3>
+<p><strong>Before you answer — Centered group rewards can lose the signal that distinguishes sampled actions.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Under the centered group estimator, all relative advantages are zero. A KL or other auxiliary term may still contribute to the update, so it does not follow that the full loss has no gradient. Inspect whether tasks are too easy, too hard, or collapsed to similar responses; check reward resolution and validity. Sampling, task selection, or exploration changes may help, but must be evaluated against held-out progress and cost.</p>
+<p><strong>Common mistake:</strong> Treating higher sampling temperature as a guaranteed fix for every zero-advantage group.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://arxiv.org/abs/1707.06347">Proximal Policy Optimization</a></li>
+<li><a href="https://arxiv.org/abs/2402.03300">DeepSeekMath: original GRPO formulation</a></li>
+<li><a href="https://arxiv.org/abs/2503.14476">DAPO</a></li>
+<li><a href="https://arxiv.org/abs/2503.20783">Dr. GRPO</a></li>
+</ul><div class="page-turn"><a href="11-rl-foundations.html">← Previous chapter</a><a href="13-kernel-learning-pipelines.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

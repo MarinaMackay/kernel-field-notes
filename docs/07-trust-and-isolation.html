@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trust boundaries, isolation, and worker state · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="active" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 07 / 15 <span>3 answered questions</span></div><h1 id="trust-boundaries-isolation-and-worker-state">Trust boundaries, isolation, and worker state</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>An evaluator is an experiment runner and a trust boundary. Keep the reference, input generation, timers, result validation, and scoring outside candidate control. Reward hacking targets evaluator weaknesses; generalization failure concerns performance on new tasks. Neither can be ruled out by a single successful example.</p>
+<p>Processes help contain crashes and isolate address spaces, but do not establish a complete security sandbox or guarantee stable GPU performance. Workers can retain contexts, modules, buffers, and allocator state. Useful persistence must be balanced against contamination and recovery. Distinguish queue, compile, execution, and infrastructure failures.</p>
+<p>Multi-tenancy can contend for execution, memory, cache, and transfer resources. MPS and MIG provide different sharing/partitioning mechanisms with device-dependent support and limits. A partition's result must not be labeled as an equivalent whole-device result.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="071-intermediate-why-validate-outputs-produced-by-the-timed-path">07.1 · Intermediate · Why validate outputs produced by the timed path?</h3>
+<p><strong>Before you answer — Correctness and timing can accidentally exercise different paths.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>A candidate could return valid results during a check yet use stale output, skip work, or launch unjoined side-stream work during timing. Tie source identity, inputs, output checks, and timing dependencies together, then independently re-evaluate finalists.</p>
+<p><strong>Common mistake:</strong> Assuming a warmup correctness pass proves all later executions are valid.</p>
+</details>
+<h3 id="072-advanced-should-a-device-outage-receive-the-same-score-as-wrong-arithmetic">07.2 · Advanced · Should a device outage receive the same score as wrong arithmetic?</h3>
+<p><strong>Before you answer — A failure must be attributed before it becomes a reward.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>No. Record invalid infrastructure measurements separately, retry under a defined policy, and do not turn outages or nonpositive timing values into ordinary rewards. Candidate-caused failures still need clear compile/correctness/runtime categories.</p>
+<p><strong>Common mistake:</strong> Training the policy to interpret unreliable infrastructure as arithmetic feedback.</p>
+</details>
+<h3 id="073-intermediate-why-might-clearing-a-cache-not-release-gpu-memory">07.3 · Intermediate · Why might clearing a cache not release GPU memory?</h3>
+<p><strong>Before you answer — Persistent state includes objects, cached artifacts, and allocator pools.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Live references can retain allocations; an allocator can reserve memory beyond currently live tensors. Track allocated and reserved memory separately. A byte budget is more useful than an entry-count limit for unevenly sized artifacts, and a damaged execution context may require worker-process replacement.</p>
+<p><strong>Common mistake:</strong> Treating memory_reserved as the size of only live application tensors.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://docs.pytorch.org/docs/stable/notes/cuda.html">PyTorch CUDA semantics</a></li>
+<li><a href="https://arxiv.org/abs/2507.11948">Kevin: Multi-Turn RL for Generating CUDA Kernels</a></li>
+<li><a href="https://docs.nvidia.com/deploy/mps/index.html">NVIDIA MPS</a></li>
+<li><a href="https://docs.nvidia.com/datacenter/tesla/mig-user-guide/introduction.html">NVIDIA MIG</a></li>
+</ul><div class="page-turn"><a href="06-measurement-and-validation.html">← Previous chapter</a><a href="08-queues-and-serving.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

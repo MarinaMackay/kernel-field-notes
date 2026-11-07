@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kernel rewards and multi-turn learning pipelines · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="active" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 13 / 15 <span>5 answered questions</span></div><h1 id="kernel-rewards-and-multi-turn-learning-pipelines">Kernel rewards and multi-turn learning pipelines</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>A kernel-learning loop can be written as: task → prompt → samples → immutable source snapshot → compile → correctness → benchmark → reward → trajectory → advantage → update → held-out evaluation. Configuration tuning selects parameters within a template; free-form optimization can change code, decomposition, and fusion.</p>
+<p>Reward design should gate speed claims on valid measurements and correctness. An illustrative reward is zero for candidate compilation/correctness failure, and <code>1 + clip(log(speedup), -0.5, 1)</code> for a correct, valid measurement. Infrastructure failure is a separate invalid state. The logarithm expresses multiplicative improvement symmetrically before clipping, but the reward shape is a design choice, not a standard.</p>
+<p>Multi-turn feedback can include compiler errors, numerical counterexamples, and profiling observations. Tools provide observations rather than sampled policy actions. Response masks control which tokens contribute to the action loss while retaining useful context. Train/validation/test separation must reflect task families, shapes, dtypes, and hardware, not just random seeds.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="131-intermediate-what-rewards-does-the-illustrative-formula-give-for-s1-and-s2">13.1 · Intermediate · What rewards does the illustrative formula give for S=1 and S=2?</h3>
+<p><strong>Before you answer — A speedup ratio must be positive and valid before taking its logarithm.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p><code>S=1</code> gives 1. <code>S=2</code> gives about 1.693 with the natural logarithm, before the upper clip is reached. Correct slow candidates have a floor of 0.5 in this design. Whether that incentive is desirable depends on the training problem; it does not repair noisy measurements.</p>
+<p><strong>Common mistake:</strong> Giving an unavailable device an ordinary zero reward or taking log of an invalid latency.</p>
+</details>
+<h3 id="132-intermediate-how-many-evaluations-are-in-8-trajectories-4-turns-3-shapes">13.2 · Intermediate · How many evaluations are in 8 trajectories × 4 turns × 3 shapes?</h3>
+<p><strong>Before you answer — A trajectory, source version, and execution are different units.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>At most 32 source versions and 96 shape evaluations if every trajectory reaches every turn and each version is tested on all three shapes. Warmups, repeated timings, retries, compilation, and correctness cases can add more work. Preserve source hashes and policy versions.</p>
+<p><strong>Common mistake:</strong> Calling 96 evaluator executions 96 independent policy updates.</p>
+</details>
+<h3 id="133-advanced-should-compiler-error-tool-messages-be-trained-as-policy-actions">13.3 · Advanced · Should compiler-error tool messages be trained as policy actions?</h3>
+<p><strong>Before you answer — Masking a token’s loss is not removing it from context.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Usually not under an action-only policy loss: the model did not sample those tool tokens as its own actions. Keep the feedback visible in context, but apply response masks to the intended generated spans. Check tokenizer boundaries, truncation, and framework behavior explicitly.</p>
+<p><strong>Common mistake:</strong> Deleting the observations because their loss mask is zero.</p>
+</details>
+<h3 id="134-advanced-is-changing-only-seeds-an-adequate-held-out-split">13.4 · Advanced · Is changing only seeds an adequate held-out split?</h3>
+<p><strong>Before you answer — Validation influences decisions; an untouched test estimates final generalization.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Usually not for a claim about new operator families or hardware. Split along the dimensions of the intended generalization claim, freeze the final test, and report search budget. Track pass@1, pass@k under a defined sampling budget, correct/valid rates, independent runtime, and GPU-hours.</p>
+<p><strong>Common mistake:</strong> Using the same test repeatedly to choose rewards, prompts, and checkpoints while calling it held-out.</p>
+</details>
+<h3 id="135-advanced-why-can-faster-evaluation-fail-to-accelerate-learning">13.5 · Advanced · Why can faster evaluation fail to accelerate learning?</h3>
+<p><strong>Before you answer — Pipeline throughput is different from improvement per unit resource.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>More evaluations can be duplicates, invalid candidates, or uninformative equal-reward groups. Generation, update, transfers, or stragglers may dominate. Retaining only perfect trajectories may also remove examples of error recovery. Measure useful learning progress per wall time and resource budget.</p>
+<p><strong>Common mistake:</strong> Equating candidate count with policy improvement.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://arxiv.org/abs/2507.11948">Kevin: Multi-Turn RL for Generating CUDA Kernels</a></li>
+<li><a href="https://arxiv.org/abs/2502.10517">KernelBench</a></li>
+<li><a href="https://verl.readthedocs.io/en/latest/sglang_multiturn/multiturn.html">verl multi-turn training</a></li>
+</ul><div class="page-turn"><a href="12-ppo-grpo-and-variants.html">← Previous chapter</a><a href="14-reading-papers-and-tools.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

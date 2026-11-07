@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Worked estimates, code review, and system design · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="active" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 15 / 15 <span>5 answered questions</span></div><h1 id="worked-estimates-code-review-and-system-design">Worked estimates, code review, and system design</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>Back-of-the-envelope models are useful when assumptions are explicit. Use consistent units, count traffic at a named level, and separate a theoretical lower bound from a measured result. For a dense GEMM with no input rereads and one output write, ideal bytes are approximately <code>(MK + KN + MN) × element_bytes</code>; accumulation precision and extra reads can change the real traffic.</p>
+<p>For code review, begin with the input contract and participating threads. A grid-stride loop decouples grid size from input size. Warp reductions require valid lane participation. A block-level partial reduction can then use shared memory and a final stage. Transpose kernels need both efficient global access and appropriate shared-memory mapping.</p>
+<p>Open-ended answers should state assumptions, decompose the system, identify bottlenecks/failure modes, and propose observations that distinguish hypotheses. Good design answers include what would change the decision, rather than a list of tools alone.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="151-intermediate-estimate-flops-and-ideal-traffic-for-a-40963-bf16-gemm">15.1 · Intermediate · Estimate FLOPs and ideal traffic for a 4096³ BF16 GEMM.</h3>
+<p><strong>Before you answer — A theoretical count is not a hardware utilization measurement.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p><code>2*4096³ = 137438953472</code> FLOPs. With two input matrices and one output, all BF16 and counted once, payload is <code>3*4096²*2 = 100663296</code> bytes. The resulting ideal AI is about 1365 FLOP/byte. Compare with the matching precision’s ridge point, but account for actual reuse, extra traffic, and implementation before predicting runtime.</p>
+<p><strong>Common mistake:</strong> Using dense BF16 compute peak for a different numerical mode or treating the ideal traffic count as observed HBM traffic.</p>
+</details>
+<h3 id="152-advanced-what-assumptions-does-a-full-mask-warp-reduction-need">15.2 · Advanced · What assumptions does a full-mask warp reduction need?</h3>
+<p><strong>Before you answer — Shuffle masks describe participation, not permission to read nonexistent values.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Every named participating lane must execute the matching collective consistently, and every source value used must be valid. A full-mask reduction sketch usually assumes complete warps and compatible control flow. A final partial warp needs correct masks and a reduction structure that does not depend on invalid lanes. Also initialize any atomic output and account for block-level accumulation order.</p>
+<p><strong>Common mistake:</strong> Making a reduction generic merely by adding <code>if (i &lt; n)</code> around a load.</p>
+</details>
+<h3 id="153-advanced-a-kernel-is-slower-than-expected-what-is-your-investigation-order">15.3 · Advanced · A kernel is slower than expected. What is your investigation order?</h3>
+<p><strong>Before you answer — The observation must be verified before explaining its cause.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Verify contract, baseline, warmup, stream dependencies, and timing validity. Estimate work/traffic and inspect a system timeline for launch gaps or transfers. Profile the kernel for resource limits, memory behavior, dependencies, and stalls. Change one supported hypothesis and rerun clean timings. Choose cache conditions appropriate to the workload rather than requiring a flush in every case.</p>
+<p><strong>Common mistake:</strong> Optimizing the first suspicious counter without reproducing the slowdown.</p>
+</details>
+<h3 id="154-advanced-design-a-kernel-evaluation-service">15.4 · Advanced · Design a kernel evaluation service.</h3>
+<p><strong>Before you answer — A service has a control plane, workers, data, and failure boundaries.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Define the task schema and numerical contract; retain immutable source and input metadata; use bounded queues and admission control; compile and execute under explicit limits; test diverse inputs and timed-path outputs; isolate/recover workers; control timing contention; separate candidate from infrastructure failures; preserve raw samples and environment versions; independently recheck finalists. Document the sandbox threat model separately from performance isolation.</p>
+<p><strong>Common mistake:</strong> Treating a subprocess as the complete security and performance design.</p>
+</details>
+<h3 id="155-advanced-online-token-latency-suddenly-spikes-what-do-you-inspect">15.5 · Advanced · Online token latency suddenly spikes. What do you inspect?</h3>
+<p><strong>Before you answer — A latency regression can originate outside the kernel.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Correlate queue wait, prompt/context lengths, batch composition, KV usage/eviction, preemption, transfers, neighbors, clock/thermal state, CPU scheduling, and allocator/runtime activity with the spike. Separate TTFT from per-token latency and compare matched workloads. Use the evidence to select a targeted change.</p>
+<p><strong>Common mistake:</strong> Attributing a P95 serving regression to arithmetic throughput before examining workload and scheduling changes.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">CUDA Best Practices Guide</a></li>
+<li><a href="https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html">CUDA advanced kernel programming</a></li>
+<li><a href="https://arxiv.org/abs/2205.14135">FlashAttention paper</a></li>
+<li><a href="https://arxiv.org/abs/2309.06180">PagedAttention paper</a></li>
+</ul><div class="page-turn"><a href="14-reading-papers-and-tools.html">← Previous chapter</a><a href="index.html#question-bank">Browse all questions →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

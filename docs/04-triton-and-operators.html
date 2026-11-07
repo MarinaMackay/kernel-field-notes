@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Triton, reductions, normalization, and GEMM · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="active" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 04 / 15 <span>8 answered questions</span></div><h1 id="triton-reductions-normalization-and-gemm">Triton, reductions, normalization, and GEMM</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>Triton expresses operations on blocks of data. <code>tl.program_id</code> identifies a program; <code>tl.arange</code> creates logical offsets. A logical block size is not a CUDA thread count. The compiler maps data and operations to the selected target with launch settings and layouts.</p>
+<p>For a one-dimensional add, form <code>i = program_id * BLOCK + arange(0, BLOCK)</code>, mask with <code>i &lt; n</code>, load the two inputs, add, and store. Dtype, strides, masking, aliasing, and numerical requirements are still the author's responsibility.</p>
+<p>Reductions combine many inputs. Floating-point addition is not associative, so changing reduction order can change rounding. Stable softmax subtracts the row maximum before exponentiation. RMSNorm divides by <code>sqrt(mean(x²) + epsilon)</code> and applies weights; it does not subtract the mean as LayerNorm does. FP32 accumulation often improves low-precision reduction accuracy.</p>
+<p>GEMM computes <code>C[i,j] = sum_k A[i,k] B[k,j]</code>, about <code>2MNK</code> FLOPs. A tiled implementation selects an output tile, loops over K tiles, accumulates, and stores. Reuse competes with resource use. Fusion can save launches and intermediate traffic; autotuning trades search cost for steady-state performance.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="041-foundation-does-block_size256-mean-256-cuda-threads">04.1 · Foundation · Does BLOCK_SIZE=256 mean 256 CUDA threads?</h3>
+<p><strong>Before you answer — A Triton program operates on a logical data block.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>No. It means 256 logical elements in this indexing example. Physical execution also depends on the target, compiler mapping, layout, and launch configuration such as <code>num_warps</code>. Do not infer thread count from element count.</p>
+<p><strong>Common mistake:</strong> Equating <code>tl.arange</code> length with the number of threads.</p>
+</details>
+<h3 id="042-foundation-for-n10-and-block4-which-offsets-are-valid">04.2 · Foundation · For n=10 and BLOCK=4, which offsets are valid?</h3>
+<p><strong>Before you answer — Tail masks protect memory accesses, not just the final output.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Three programs form offsets 0–3, 4–7, and 8–11. The final two offsets must be masked on loads and stores. Choose masked fallback values appropriate to subsequent operations.</p>
+<p><strong>Common mistake:</strong> Masking the store while still reading beyond an input.</p>
+</details>
+<h3 id="043-intermediate-why-use-negative-infinity-for-masked-softmax-inputs">04.3 · Intermediate · Why use negative infinity for masked softmax inputs?</h3>
+<p><strong>Before you answer — A reduction needs neutral values for inactive entries.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>For a valid row with finite elements, negative infinity cannot increase the maximum and contributes zero after exponentiation. Zero is not a neutral value for max when every valid logit is negative. An entirely masked row needs an explicit semantic choice; subtracting negative infinity from itself produces NaN.</p>
+<p><strong>Common mistake:</strong> Assuming the same mask fallback is correct for sum, max, and softmax.</p>
+</details>
+<h3 id="044-intermediate-is-a-tree-reduction-always-bitwise-deterministic">04.4 · Intermediate · Is a tree reduction always bitwise deterministic?</h3>
+<p><strong>Before you answer — Determinism depends on a specified order and execution contract.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>No universal guarantee follows from the word tree. A fixed reduction structure on a fixed implementation can provide repeatability, while compiler transformations, precision modes, and architecture changes can alter results. Atomic floating-point accumulation can vary in order without being a data race when used correctly.</p>
+<p><strong>Common mistake:</strong> Promising reproducibility across devices because the algorithm is called a tree.</p>
+</details>
+<h3 id="045-intermediate-what-does-a-minimal-gemm-plan-need">04.5 · Intermediate · What does a minimal GEMM plan need?</h3>
+<p><strong>Before you answer — Tiling reuses loaded operands across multiple outputs.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Select tile coordinates from program IDs; create row, column, and K offsets; mask edges; load A and B tiles using their strides; accumulate compatible dot products, commonly into FP32; advance along K; convert/store under the output contract. Split-K adds partial-result reduction; persistent schedules and grouped ordering change work assignment or cache reuse.</p>
+<p><strong>Common mistake:</strong> Assuming every <code>tl.dot</code> shape and dtype automatically selects the desired Tensor Core path.</p>
+</details>
+<h3 id="046-intermediate-what-can-go-wrong-during-autotuning">04.6 · Intermediate · What can go wrong during autotuning?</h3>
+<p><strong>Before you answer — The configuration search actually runs candidate implementations.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Incorrect keys can reuse a configuration across workloads that need different choices. In-place kernels can mutate inputs during trials unless reset or restored. Too many stages can consume storage; more warps can increase overhead. Record compile/search cost and validate the chosen configuration.</p>
+<p><strong>Common mistake:</strong> Reporting the best steady-state microseconds while hiding minutes of one-time tuning.</p>
+</details>
+<h3 id="047-intermediate-should-matmul-bias-and-activation-always-be-fused">04.7 · Intermediate · Should matmul, bias, and activation always be fused?</h3>
+<p><strong>Before you answer — Fusion removes boundaries but also changes resource use.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>An epilogue may avoid intermediate writes and additional launches, but a fused implementation can have higher register pressure or lose a superior library implementation. Compare equivalent numerical contracts and the entire operation. Combining independent small operations is a different fusion pattern.</p>
+<p><strong>Common mistake:</strong> Assuming fewer kernel launches proves lower total latency.</p>
+</details>
+<h3 id="048-intermediate-how-does-rmsnorm-differ-from-layernorm">04.8 · Intermediate · How does RMSNorm differ from LayerNorm?</h3>
+<p><strong>Before you answer — RMS normalization uses a second moment without subtracting the mean.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>RMSNorm computes <code>y_i = x_i * w_i / sqrt(mean(x²) + epsilon)</code>. LayerNorm normalizes centered values using the mean and variance, with its specified affine transformation. For an RMSNorm kernel, accumulate the sum of squares with suitable precision, handle tails, and apply the weights under the dtype and stride contract. Low-precision input storage does not require low-precision accumulation.</p>
+<p><strong>Common mistake:</strong> Implementing mean subtraction and calling the result RMSNorm.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://triton-lang.org/main/getting-started/tutorials/01-vector-add.html">Triton vector addition tutorial</a></li>
+<li><a href="https://triton-lang.org/main/getting-started/tutorials/03-matrix-multiplication.html">Triton matrix multiplication tutorial</a></li>
+<li><a href="https://triton-lang.org/main/getting-started/tutorials/02-fused-softmax.html">Triton fused softmax</a></li>
+</ul><div class="page-turn"><a href="03-memory-and-synchronization.html">← Previous chapter</a><a href="05-compilers-and-graphs.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

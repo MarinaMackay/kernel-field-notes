@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Queues, scheduling, and service objectives · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="active" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 08 / 15 <span>3 answered questions</span></div><h1 id="queues-scheduling-and-service-objectives">Queues, scheduling, and service objectives</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>Admission control decides which work enters a service. Backpressure slows producers when downstream capacity is exhausted. FIFO can create head-of-line blocking; strict priorities can starve low-priority work. Fairness requires a unit: number of tasks, device time, or another stated resource.</p>
+<p>For a stable system, Little's law relates averages: <code>L = arrival rate × mean time in system</code>. Use consistent boundaries and units. Queue time is not execution time. More concurrency can hide gaps, but can also increase contention, memory pressure, and tail latency.</p>
+<p>Serving metrics need a workload: request sizes, arrival pattern, concurrency, batching, and latency objectives. For generation, distinguish time to first token (TTFT), inter-token latency (ITL), and completed useful tokens or requests per second.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="081-foundation-at-2-requestss-and-10-s-mean-time-in-system-how-many-requests-are-present">08.1 · Foundation · At 2 requests/s and 10 s mean time in system, how many requests are present?</h3>
+<p><strong>Before you answer — Little’s law concerns averages over the same system boundary.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p><code>L = 2 × 10 = 20</code> requests on average, assuming a stable system and matching definitions. This is not a maximum queue length and does not by itself give P95 latency.</p>
+<p><strong>Common mistake:</strong> Substituting a percentile into a mean-value identity.</p>
+</details>
+<h3 id="082-intermediate-what-happens-if-generation-is-faster-than-kernel-evaluation">08.2 · Intermediate · What happens if generation is faster than kernel evaluation?</h3>
+<p><strong>Before you answer — Every stage has its own capacity and queue.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Pending work grows unless the producer is slowed or work is rejected. Bound the queue, expose queue age, and use admission/backpressure thresholds. Separate compilation capacity from controlled timing capacity when they interfere.</p>
+<p><strong>Common mistake:</strong> Increasing rollout concurrency indefinitely because the generator has spare compute.</p>
+</details>
+<h3 id="083-advanced-what-should-i-measure-before-adding-twice-as-many-gpus">08.3 · Advanced · What should I measure before adding twice as many GPUs?</h3>
+<p><strong>Before you answer — A straggler changes the completion of a group.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Measure generation, compilation, correctness, timing, update, transfer, and queue delays; valid/correct rates; GPU utilization; and group completion tails. Add capacity to the bottleneck, then remeasure. If one candidate stalls an entire group, timeout or scheduling policy may matter more than raw device count.</p>
+<p><strong>Common mistake:</strong> Assuming doubling one stage doubles end-to-end learning or serving throughput.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://doi.org/10.1287/opre.9.3.383">Little’s law — original paper DOI</a></li>
+<li><a href="https://arxiv.org/abs/2507.11948">Kevin: Multi-Turn RL for Generating CUDA Kernels</a></li>
+</ul><div class="page-turn"><a href="07-trust-and-isolation.html">← Previous chapter</a><a href="09-attention-and-inference.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

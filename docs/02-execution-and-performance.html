@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Threads, warps, occupancy, and performance models · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="active" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 02 / 15 <span>5 answered questions</span></div><h1 id="threads-warps-occupancy-and-performance-models">Threads, warps, occupancy, and performance models</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>The hierarchy is <strong>grid → blocks → warps → threads</strong>. On NVIDIA GPUs, a warp has 32 lanes. A block is a cooperation scope and is scheduled onto one SM; multiple blocks may reside on an SM when resources allow. A block is not an SM. Do not assume an execution order between ordinary independent blocks.</p>
+<p><strong>Arithmetic intensity (AI)</strong> is FLOPs divided by bytes transferred at a stated memory boundary. A simple roofline model is <code>performance ≤ min(peak FLOP/s, bandwidth × AI)</code>. FP32 vector addition uses one add and ideally two reads plus one write: <code>1 / 12 FLOP/byte</code>. Tiny workloads may instead expose launch cost, limited parallelism, or dependencies.</p>
+<p><strong>Occupancy</strong> is resident active warps divided by the architectural maximum, not the fraction of arithmetic units doing useful work. Registers, shared memory, block limits, and launch size constrain it. More reuse and instruction-level parallelism may outperform a higher-occupancy configuration. A finite grid also creates partially filled final waves.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="021-foundation-how-many-256-thread-blocks-cover-1000-elements">02.1 · Foundation · How many 256-thread blocks cover 1,000 elements?</h3>
+<p><strong>Before you answer — Global indexing combines a block index with an index inside that block.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p><code>ceil(1000 / 256) = 4</code> blocks launch 1,024 threads. The last 24 threads must avoid out-of-range accesses, for example with <code>if (i &lt; n)</code>. Each block contains eight warps.</p>
+<p><strong>Common mistake:</strong> Forgetting the tail because the allocated launch size exceeds the logical length.</p>
+</details>
+<h3 id="022-intermediate-work-out-occupancy-for-a-hypothetical-sm">02.2 · Intermediate · Work out occupancy for a hypothetical SM.</h3>
+<p><strong>Before you answer — Resource limits combine; the tightest limit wins.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Assume 65,536 registers, 64 maximum warps, 256 threads/block, and 64 registers/thread. One block uses 16,384 registers, so registers permit four blocks or 32 warps: 50% occupancy. If each block also needs 48 KiB and the available shared-memory budget is 96 KiB, only two fit: 16 warps or 25%. Real allocation granularity and other limits may reduce this further.</p>
+<p><strong>Common mistake:</strong> Presenting these hypothetical limits as specifications for every GPU.</p>
+</details>
+<h3 id="023-intermediate-why-can-a-larger-tile-be-slower">02.3 · Intermediate · Why can a larger tile be slower?</h3>
+<p><strong>Before you answer — Tiling increases reuse but consumes finite working storage.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>A larger tile may increase register use, shared memory, spills, synchronization, or unused work at boundaries. It may reduce the number of resident blocks. Measure the relevant shapes rather than optimizing occupancy or tile size alone.</p>
+<p><strong>Common mistake:</strong> Assuming more reuse always outweighs every resource cost.</p>
+</details>
+<h3 id="024-intermediate-do-low-memory-and-compute-throughput-prove-a-kernel-is-latency-bound">02.4 · Intermediate · Do low memory and compute throughput prove a kernel is latency-bound?</h3>
+<p><strong>Before you answer — Roofline is a bound at a chosen memory level, not a full latency simulator.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>They motivate further investigation. Check launch gaps, insufficient grid size, dependencies, synchronization, imbalance, and counter definitions. A low percentage alone does not identify the cause.</p>
+<p><strong>Common mistake:</strong> Assigning a bottleneck from two utilization percentages without a timeline.</p>
+</details>
+<h3 id="025-intermediate-what-is-the-tail-effect-with-133-blocks-and-132-sms">02.5 · Intermediate · What is the tail effect with 133 blocks and 132 SMs?</h3>
+<p><strong>Before you answer — Grid size and device size interact.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Under the illustrative assumption that only one block fits per SM and all blocks take equal time, the first wave can occupy 132 SMs and the remaining block leaves most idle. Real scheduling and unequal block durations can change the shape of this tail.</p>
+<p><strong>Common mistake:</strong> Treating SM count alone as sufficient to predict runtime.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/programming-model.html">CUDA programming model</a></li>
+<li><a href="https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html">CUDA advanced kernel programming</a></li>
+<li><a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">CUDA Best Practices Guide</a></li>
+</ul><div class="page-turn"><a href="01-gpu-foundations.html">← Previous chapter</a><a href="03-memory-and-synchronization.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

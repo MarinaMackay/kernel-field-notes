@@ -1,0 +1,716 @@
+[
+  {
+    "id": "01.1",
+    "difficulty": "Foundation",
+    "title": "Why not keep all model weights in registers?",
+    "url": "01-gpu-foundations.html#011-foundation-why-not-keep-all-model-weights-in-registers",
+    "chapter": "GPU foundations and the memory hierarchy"
+  },
+  {
+    "id": "01.2",
+    "difficulty": "Foundation",
+    "title": "Are shared memory and L1 cache the same thing?",
+    "url": "01-gpu-foundations.html#012-foundation-are-shared-memory-and-l1-cache-the-same-thing",
+    "chapter": "GPU foundations and the memory hierarchy"
+  },
+  {
+    "id": "01.3",
+    "difficulty": "Foundation",
+    "title": "Does a cache hit prove that memory access is coalesced?",
+    "url": "01-gpu-foundations.html#013-foundation-does-a-cache-hit-prove-that-memory-access-is-coalesced",
+    "chapter": "GPU foundations and the memory hierarchy"
+  },
+  {
+    "id": "01.4",
+    "difficulty": "Foundation",
+    "title": "How do you address a transposed tensor?",
+    "url": "01-gpu-foundations.html#014-foundation-how-do-you-address-a-transposed-tensor",
+    "chapter": "GPU foundations and the memory hierarchy"
+  },
+  {
+    "id": "02.1",
+    "difficulty": "Foundation",
+    "title": "How many 256-thread blocks cover 1,000 elements?",
+    "url": "02-execution-and-performance.html#021-foundation-how-many-256-thread-blocks-cover-1000-elements",
+    "chapter": "Threads, warps, occupancy, and performance models"
+  },
+  {
+    "id": "02.2",
+    "difficulty": "Intermediate",
+    "title": "Work out occupancy for a hypothetical SM.",
+    "url": "02-execution-and-performance.html#022-intermediate-work-out-occupancy-for-a-hypothetical-sm",
+    "chapter": "Threads, warps, occupancy, and performance models"
+  },
+  {
+    "id": "02.3",
+    "difficulty": "Intermediate",
+    "title": "Why can a larger tile be slower?",
+    "url": "02-execution-and-performance.html#023-intermediate-why-can-a-larger-tile-be-slower",
+    "chapter": "Threads, warps, occupancy, and performance models"
+  },
+  {
+    "id": "02.4",
+    "difficulty": "Intermediate",
+    "title": "Do low memory and compute throughput prove a kernel is latency-bound?",
+    "url": "02-execution-and-performance.html#024-intermediate-do-low-memory-and-compute-throughput-prove-a-kernel-is-latency-bound",
+    "chapter": "Threads, warps, occupancy, and performance models"
+  },
+  {
+    "id": "02.5",
+    "difficulty": "Intermediate",
+    "title": "What is the tail effect with 133 blocks and 132 SMs?",
+    "url": "02-execution-and-performance.html#025-intermediate-what-is-the-tail-effect-with-133-blocks-and-132-sms",
+    "chapter": "Threads, warps, occupancy, and performance models"
+  },
+  {
+    "id": "03.1",
+    "difficulty": "Intermediate",
+    "title": "Can each thread read consecutive elements yet produce poor coalescing?",
+    "url": "03-memory-and-synchronization.html#031-intermediate-can-each-thread-read-consecutive-elements-yet-produce-poor-coalescing",
+    "chapter": "Memory access and synchronization"
+  },
+  {
+    "id": "03.2",
+    "difficulty": "Intermediate",
+    "title": "Why is a transpose tile often declared as float tile[32][33]?",
+    "url": "03-memory-and-synchronization.html#032-intermediate-why-is-a-transpose-tile-often-declared-as-float-tile3233",
+    "chapter": "Memory access and synchronization"
+  },
+  {
+    "id": "03.3",
+    "difficulty": "Foundation",
+    "title": "Can __syncthreads() be inside if (threadIdx.x < 16)?",
+    "url": "03-memory-and-synchronization.html#033-foundation-can-__syncthreads-be-inside-if-threadidxx-16",
+    "chapter": "Memory access and synchronization"
+  },
+  {
+    "id": "03.4",
+    "difficulty": "Intermediate",
+    "title": "Does atomicAdd synchronize every block?",
+    "url": "03-memory-and-synchronization.html#034-intermediate-does-atomicadd-synchronize-every-block",
+    "chapter": "Memory access and synchronization"
+  },
+  {
+    "id": "03.5",
+    "difficulty": "Advanced",
+    "title": "How should I approach cp.async, TMA, warp specialization, and newer Tensor Core instructions?",
+    "url": "03-memory-and-synchronization.html#035-advanced-how-should-i-approach-cpasync-tma-warp-specialization-and-newer-tensor-core-instructions",
+    "chapter": "Memory access and synchronization"
+  },
+  {
+    "id": "04.1",
+    "difficulty": "Foundation",
+    "title": "Does BLOCK_SIZE=256 mean 256 CUDA threads?",
+    "url": "04-triton-and-operators.html#041-foundation-does-block_size256-mean-256-cuda-threads",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.2",
+    "difficulty": "Foundation",
+    "title": "For n=10 and BLOCK=4, which offsets are valid?",
+    "url": "04-triton-and-operators.html#042-foundation-for-n10-and-block4-which-offsets-are-valid",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.3",
+    "difficulty": "Intermediate",
+    "title": "Why use negative infinity for masked softmax inputs?",
+    "url": "04-triton-and-operators.html#043-intermediate-why-use-negative-infinity-for-masked-softmax-inputs",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.4",
+    "difficulty": "Intermediate",
+    "title": "Is a tree reduction always bitwise deterministic?",
+    "url": "04-triton-and-operators.html#044-intermediate-is-a-tree-reduction-always-bitwise-deterministic",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.5",
+    "difficulty": "Intermediate",
+    "title": "What does a minimal GEMM plan need?",
+    "url": "04-triton-and-operators.html#045-intermediate-what-does-a-minimal-gemm-plan-need",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.6",
+    "difficulty": "Intermediate",
+    "title": "What can go wrong during autotuning?",
+    "url": "04-triton-and-operators.html#046-intermediate-what-can-go-wrong-during-autotuning",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.7",
+    "difficulty": "Intermediate",
+    "title": "Should matmul, bias, and activation always be fused?",
+    "url": "04-triton-and-operators.html#047-intermediate-should-matmul-bias-and-activation-always-be-fused",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "04.8",
+    "difficulty": "Intermediate",
+    "title": "How does RMSNorm differ from LayerNorm?",
+    "url": "04-triton-and-operators.html#048-intermediate-how-does-rmsnorm-differ-from-layernorm",
+    "chapter": "Triton, reductions, normalization, and GEMM"
+  },
+  {
+    "id": "05.1",
+    "difficulty": "Foundation",
+    "title": "Are torch.compile and CUDA Graphs the same optimization?",
+    "url": "05-compilers-and-graphs.html#051-foundation-are-torchcompile-and-cuda-graphs-the-same-optimization",
+    "chapter": "Compilation, JIT, integration, and CUDA Graphs"
+  },
+  {
+    "id": "05.2",
+    "difficulty": "Intermediate",
+    "title": "Why do graph examples reuse static input buffers?",
+    "url": "05-compilers-and-graphs.html#052-intermediate-why-do-graph-examples-reuse-static-input-buffers",
+    "chapter": "Compilation, JIT, integration, and CUDA Graphs"
+  },
+  {
+    "id": "05.3",
+    "difficulty": "Intermediate",
+    "title": "Does opcheck prove that my custom operator computes the right answer?",
+    "url": "05-compilers-and-graphs.html#053-intermediate-does-opcheck-prove-that-my-custom-operator-computes-the-right-answer",
+    "chapter": "Compilation, JIT, integration, and CUDA Graphs"
+  },
+  {
+    "id": "06.1",
+    "difficulty": "Foundation",
+    "title": "Can throughput improve while latency gets worse?",
+    "url": "06-measurement-and-validation.html#061-foundation-can-throughput-improve-while-latency-gets-worse",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.2",
+    "difficulty": "Foundation",
+    "title": "Which baseline should I use?",
+    "url": "06-measurement-and-validation.html#062-foundation-which-baseline-should-i-use",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.3",
+    "difficulty": "Foundation",
+    "title": "Does changing precision count as a kernel optimization?",
+    "url": "06-measurement-and-validation.html#063-foundation-does-changing-precision-count-as-a-kernel-optimization",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.4",
+    "difficulty": "Foundation",
+    "title": "How are CUDA Event and perf_counter different?",
+    "url": "06-measurement-and-validation.html#064-foundation-how-are-cuda-event-and-perf_counter-different",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.5",
+    "difficulty": "Intermediate",
+    "title": "Does a CUDA Event give pure kernel execution time?",
+    "url": "06-measurement-and-validation.html#065-intermediate-does-a-cuda-event-give-pure-kernel-execution-time",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.6",
+    "difficulty": "Foundation",
+    "title": "Why can .item(), printing, or copying to CPU change the timing?",
+    "url": "06-measurement-and-validation.html#066-foundation-why-can-item-printing-or-copying-to-cpu-change-the-timing",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.7",
+    "difficulty": "Intermediate",
+    "title": "What if a candidate launches work on a side stream?",
+    "url": "06-measurement-and-validation.html#067-intermediate-what-if-a-candidate-launches-work-on-a-side-stream",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.8",
+    "difficulty": "Intermediate",
+    "title": "Are wait_stream(), record_stream(), and synchronize() interchangeable?",
+    "url": "06-measurement-and-validation.html#068-intermediate-are-wait_stream-record_stream-and-synchronize-interchangeable",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.9",
+    "difficulty": "Intermediate",
+    "title": "Does non_blocking=True guarantee a transfer overlaps computation?",
+    "url": "06-measurement-and-validation.html#069-intermediate-does-non_blockingtrue-guarantee-a-transfer-overlaps-computation",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.10",
+    "difficulty": "Intermediate",
+    "title": "Should I benchmark with CUDA_LAUNCH_BLOCKING=1?",
+    "url": "06-measurement-and-validation.html#0610-intermediate-should-i-benchmark-with-cuda_launch_blocking1",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.11",
+    "difficulty": "Intermediate",
+    "title": "Is a cold worker the same as a cold cache?",
+    "url": "06-measurement-and-validation.html#0611-intermediate-is-a-cold-worker-the-same-as-a-cold-cache",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.12",
+    "difficulty": "Intermediate",
+    "title": "How do torch.compile and CUDA Graphs differ?",
+    "url": "06-measurement-and-validation.html#0612-intermediate-how-do-torchcompile-and-cuda-graphs-differ",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.13",
+    "difficulty": "Intermediate",
+    "title": "What should I check if graph replay is still slow?",
+    "url": "06-measurement-and-validation.html#0613-intermediate-what-should-i-check-if-graph-replay-is-still-slow",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.14",
+    "difficulty": "Intermediate",
+    "title": "What do benchmark helpers handle, and what do I still own?",
+    "url": "06-measurement-and-validation.html#0614-intermediate-what-do-benchmark-helpers-handle-and-what-do-i-still-own",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.15",
+    "difficulty": "Intermediate",
+    "title": "Should every benchmark flush L2?",
+    "url": "06-measurement-and-validation.html#0615-intermediate-should-every-benchmark-flush-l2",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.16",
+    "difficulty": "Intermediate",
+    "title": "Can preparation outside the timer affect the interval inside it?",
+    "url": "06-measurement-and-validation.html#0616-intermediate-can-preparation-outside-the-timer-affect-the-interval-inside-it",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.17",
+    "difficulty": "Intermediate",
+    "title": "Are cache hits and coalesced accesses the same thing?",
+    "url": "06-measurement-and-validation.html#0617-intermediate-are-cache-hits-and-coalesced-accesses-the-same-thing",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.18",
+    "difficulty": "Intermediate",
+    "title": "Do fixed clocks remove all noise?",
+    "url": "06-measurement-and-validation.html#0618-intermediate-do-fixed-clocks-remove-all-noise",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.19",
+    "difficulty": "Intermediate",
+    "title": "Why interleave A/B measurements?",
+    "url": "06-measurement-and-validation.html#0619-intermediate-why-interleave-ab-measurements",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.20",
+    "difficulty": "Advanced",
+    "title": "Why independently retest the winner?",
+    "url": "06-measurement-and-validation.html#0620-advanced-why-independently-retest-the-winner",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.21",
+    "difficulty": "Foundation",
+    "title": "Why use the geometric mean of speedups?",
+    "url": "06-measurement-and-validation.html#0621-foundation-why-use-the-geometric-mean-of-speedups",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.22",
+    "difficulty": "Intermediate",
+    "title": "How does speedup differ from fast_p?",
+    "url": "06-measurement-and-validation.html#0622-intermediate-how-does-speedup-differ-from-fast_p",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.23",
+    "difficulty": "Advanced",
+    "title": "Does trying more candidates mean the model learned?",
+    "url": "06-measurement-and-validation.html#0623-advanced-does-trying-more-candidates-mean-the-model-learned",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.24",
+    "difficulty": "Intermediate",
+    "title": "Why isn't one random input enough?",
+    "url": "06-measurement-and-validation.html#0624-intermediate-why-isnt-one-random-input-enough",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.25",
+    "difficulty": "Foundation",
+    "title": "Does allclose mean bitwise equality?",
+    "url": "06-measurement-and-validation.html#0625-foundation-does-allclose-mean-bitwise-equality",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.26",
+    "difficulty": "Intermediate",
+    "title": "Is a race just ordinary nondeterminism?",
+    "url": "06-measurement-and-validation.html#0626-intermediate-is-a-race-just-ordinary-nondeterminism",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.27",
+    "difficulty": "Intermediate",
+    "title": "Why validate the benchmark execution path?",
+    "url": "06-measurement-and-validation.html#0627-intermediate-why-validate-the-benchmark-execution-path",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.28",
+    "difficulty": "Advanced",
+    "title": "How is reward hacking different from overfitting?",
+    "url": "06-measurement-and-validation.html#0628-advanced-how-is-reward-hacking-different-from-overfitting",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.29",
+    "difficulty": "Intermediate",
+    "title": "How do I tell memory-bound from compute-bound?",
+    "url": "06-measurement-and-validation.html#0629-intermediate-how-do-i-tell-memory-bound-from-compute-bound",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.30",
+    "difficulty": "Intermediate",
+    "title": "Why can a bigger tile or higher occupancy make a kernel slower?",
+    "url": "06-measurement-and-validation.html#0630-intermediate-why-can-a-bigger-tile-or-higher-occupancy-make-a-kernel-slower",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.31",
+    "difficulty": "Intermediate",
+    "title": "What do stall reasons tell me?",
+    "url": "06-measurement-and-validation.html#0631-intermediate-what-do-stall-reasons-tell-me",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.32",
+    "difficulty": "Intermediate",
+    "title": "Does fusion always help?",
+    "url": "06-measurement-and-validation.html#0632-intermediate-does-fusion-always-help",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.33",
+    "difficulty": "Advanced",
+    "title": "Does subprocess isolation make timings independent?",
+    "url": "06-measurement-and-validation.html#0633-advanced-does-subprocess-isolation-make-timings-independent",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.34",
+    "difficulty": "Advanced",
+    "title": "What should happen after a timeout, OOM, or device failure?",
+    "url": "06-measurement-and-validation.html#0634-advanced-what-should-happen-after-a-timeout-oom-or-device-failure",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.35",
+    "difficulty": "Intermediate",
+    "title": "Why can memory_reserved stay high after tensors are freed?",
+    "url": "06-measurement-and-validation.html#0635-intermediate-why-can-memory_reserved-stay-high-after-tensors-are-freed",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.36",
+    "difficulty": "Intermediate",
+    "title": "If a job took five seconds, was the kernel running for five seconds?",
+    "url": "06-measurement-and-validation.html#0636-intermediate-if-a-job-took-five-seconds-was-the-kernel-running-for-five-seconds",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.37",
+    "difficulty": "Foundation",
+    "title": "Why doesn't a 2× faster kernel make the whole model 2× faster?",
+    "url": "06-measurement-and-validation.html#0637-foundation-why-doesnt-a-2-faster-kernel-make-the-whole-model-2-faster",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.38",
+    "difficulty": "Intermediate",
+    "title": "What if production latency suddenly becomes noisy?",
+    "url": "06-measurement-and-validation.html#0638-intermediate-what-if-production-latency-suddenly-becomes-noisy",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.39",
+    "difficulty": "Intermediate",
+    "title": "How would I investigate a kernel that is slower than expected?",
+    "url": "06-measurement-and-validation.html#0639-intermediate-how-would-i-investigate-a-kernel-that-is-slower-than-expected",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "06.40",
+    "difficulty": "Advanced",
+    "title": "How would I design a trustworthy evaluation service?",
+    "url": "06-measurement-and-validation.html#0640-advanced-how-would-i-design-a-trustworthy-evaluation-service",
+    "chapter": "Measurement, streams, correctness, and profiling"
+  },
+  {
+    "id": "07.1",
+    "difficulty": "Intermediate",
+    "title": "Why validate outputs produced by the timed path?",
+    "url": "07-trust-and-isolation.html#071-intermediate-why-validate-outputs-produced-by-the-timed-path",
+    "chapter": "Trust boundaries, isolation, and worker state"
+  },
+  {
+    "id": "07.2",
+    "difficulty": "Advanced",
+    "title": "Should a device outage receive the same score as wrong arithmetic?",
+    "url": "07-trust-and-isolation.html#072-advanced-should-a-device-outage-receive-the-same-score-as-wrong-arithmetic",
+    "chapter": "Trust boundaries, isolation, and worker state"
+  },
+  {
+    "id": "07.3",
+    "difficulty": "Intermediate",
+    "title": "Why might clearing a cache not release GPU memory?",
+    "url": "07-trust-and-isolation.html#073-intermediate-why-might-clearing-a-cache-not-release-gpu-memory",
+    "chapter": "Trust boundaries, isolation, and worker state"
+  },
+  {
+    "id": "08.1",
+    "difficulty": "Foundation",
+    "title": "At 2 requests/s and 10 s mean time in system, how many requests are present?",
+    "url": "08-queues-and-serving.html#081-foundation-at-2-requestss-and-10-s-mean-time-in-system-how-many-requests-are-present",
+    "chapter": "Queues, scheduling, and service objectives"
+  },
+  {
+    "id": "08.2",
+    "difficulty": "Intermediate",
+    "title": "What happens if generation is faster than kernel evaluation?",
+    "url": "08-queues-and-serving.html#082-intermediate-what-happens-if-generation-is-faster-than-kernel-evaluation",
+    "chapter": "Queues, scheduling, and service objectives"
+  },
+  {
+    "id": "08.3",
+    "difficulty": "Advanced",
+    "title": "What should I measure before adding twice as many GPUs?",
+    "url": "08-queues-and-serving.html#083-advanced-what-should-i-measure-before-adding-twice-as-many-gpus",
+    "chapter": "Queues, scheduling, and service objectives"
+  },
+  {
+    "id": "09.1",
+    "difficulty": "Foundation",
+    "title": "FlashAttention or PagedAttention—which one replaces the other?",
+    "url": "09-attention-and-inference.html#091-foundation-flashattention-or-pagedattentionwhich-one-replaces-the-other",
+    "chapter": "Attention, KV caches, and inference"
+  },
+  {
+    "id": "09.2",
+    "difficulty": "Intermediate",
+    "title": "Estimate KV storage for 32 layers, 8 KV heads, head_dim=128, and BF16.",
+    "url": "09-attention-and-inference.html#092-intermediate-estimate-kv-storage-for-32-layers-8-kv-heads-head_dim128-and-bf16",
+    "chapter": "Attention, KV caches, and inference"
+  },
+  {
+    "id": "09.3",
+    "difficulty": "Advanced",
+    "title": "Derive the online softmax update.",
+    "url": "09-attention-and-inference.html#093-advanced-derive-the-online-softmax-update",
+    "chapter": "Attention, KV caches, and inference"
+  },
+  {
+    "id": "09.4",
+    "difficulty": "Intermediate",
+    "title": "What does 16 GB of weights divided by 3.35 TB/s tell us?",
+    "url": "09-attention-and-inference.html#094-intermediate-what-does-16-gb-of-weights-divided-by-335-tbs-tell-us",
+    "chapter": "Attention, KV caches, and inference"
+  },
+  {
+    "id": "09.5",
+    "difficulty": "Intermediate",
+    "title": "Why separate prefill and decode, or use speculative decoding?",
+    "url": "09-attention-and-inference.html#095-intermediate-why-separate-prefill-and-decode-or-use-speculative-decoding",
+    "chapter": "Attention, KV caches, and inference"
+  },
+  {
+    "id": "09.6",
+    "difficulty": "Foundation",
+    "title": "Are GQA, MQA, and prefix caching the same idea?",
+    "url": "09-attention-and-inference.html#096-foundation-are-gqa-mqa-and-prefix-caching-the-same-idea",
+    "chapter": "Attention, KV caches, and inference"
+  },
+  {
+    "id": "10.1",
+    "difficulty": "Foundation",
+    "title": "Why is 7B BF16 inference not simply a 14 GB GPU requirement?",
+    "url": "10-distributed-and-training.html#101-foundation-why-is-7b-bf16-inference-not-simply-a-14-gb-gpu-requirement",
+    "chapter": "Distributed execution and training memory"
+  },
+  {
+    "id": "10.2",
+    "difficulty": "Intermediate",
+    "title": "Where does an illustrative 16 bytes per parameter come from?",
+    "url": "10-distributed-and-training.html#102-intermediate-where-does-an-illustrative-16-bytes-per-parameter-come-from",
+    "chapter": "Distributed execution and training memory"
+  },
+  {
+    "id": "10.3",
+    "difficulty": "Intermediate",
+    "title": "What is the ring all-reduce traffic per rank?",
+    "url": "10-distributed-and-training.html#103-intermediate-what-is-the-ring-all-reduce-traffic-per-rank",
+    "chapter": "Distributed execution and training memory"
+  },
+  {
+    "id": "10.4",
+    "difficulty": "Intermediate",
+    "title": "What should a DP / FSDP / TP / PP / EP comparison include?",
+    "url": "10-distributed-and-training.html#104-intermediate-what-should-a-dp-fsdp-tp-pp-ep-comparison-include",
+    "chapter": "Distributed execution and training memory"
+  },
+  {
+    "id": "11.1",
+    "difficulty": "Foundation",
+    "title": "Is a multi-turn coding agent automatically doing RL?",
+    "url": "11-rl-foundations.html#111-foundation-is-a-multi-turn-coding-agent-automatically-doing-rl",
+    "chapter": "Reinforcement learning: concepts before formulas"
+  },
+  {
+    "id": "11.2",
+    "difficulty": "Intermediate",
+    "title": "Can a high reward have a low advantage?",
+    "url": "11-rl-foundations.html#112-intermediate-can-a-high-reward-have-a-low-advantage",
+    "chapter": "Reinforcement learning: concepts before formulas"
+  },
+  {
+    "id": "11.3",
+    "difficulty": "Intermediate",
+    "title": "How can timing feedback train a code policy?",
+    "url": "11-rl-foundations.html#113-intermediate-how-can-timing-feedback-train-a-code-policy",
+    "chapter": "Reinforcement learning: concepts before formulas"
+  },
+  {
+    "id": "12.1",
+    "difficulty": "Intermediate",
+    "title": "Compute group advantages for rewards [1,0,0,1].",
+    "url": "12-ppo-grpo-and-variants.html#121-intermediate-compute-group-advantages-for-rewards-1001",
+    "chapter": "PPO, GRPO, baselines, and policy lag"
+  },
+  {
+    "id": "12.2",
+    "difficulty": "Advanced",
+    "title": "How does r_i - mean(other rewards) relate to r_i - group_mean?",
+    "url": "12-ppo-grpo-and-variants.html#122-advanced-how-does-r_i-meanother-rewards-relate-to-r_i-group_mean",
+    "chapter": "PPO, GRPO, baselines, and policy lag"
+  },
+  {
+    "id": "12.3",
+    "difficulty": "Intermediate",
+    "title": "Do PPO clipping and a reference KL penalty do the same thing?",
+    "url": "12-ppo-grpo-and-variants.html#123-intermediate-do-ppo-clipping-and-a-reference-kl-penalty-do-the-same-thing",
+    "chapter": "PPO, GRPO, baselines, and policy lag"
+  },
+  {
+    "id": "12.4",
+    "difficulty": "Advanced",
+    "title": "What should I check when reading DAPO or Dr. GRPO?",
+    "url": "12-ppo-grpo-and-variants.html#124-advanced-what-should-i-check-when-reading-dapo-or-dr-grpo",
+    "chapter": "PPO, GRPO, baselines, and policy lag"
+  },
+  {
+    "id": "12.5",
+    "difficulty": "Advanced",
+    "title": "What if every response in a GRPO group has the same reward?",
+    "url": "12-ppo-grpo-and-variants.html#125-advanced-what-if-every-response-in-a-grpo-group-has-the-same-reward",
+    "chapter": "PPO, GRPO, baselines, and policy lag"
+  },
+  {
+    "id": "13.1",
+    "difficulty": "Intermediate",
+    "title": "What rewards does the illustrative formula give for S=1 and S=2?",
+    "url": "13-kernel-learning-pipelines.html#131-intermediate-what-rewards-does-the-illustrative-formula-give-for-s1-and-s2",
+    "chapter": "Kernel rewards and multi-turn learning pipelines"
+  },
+  {
+    "id": "13.2",
+    "difficulty": "Intermediate",
+    "title": "How many evaluations are in 8 trajectories × 4 turns × 3 shapes?",
+    "url": "13-kernel-learning-pipelines.html#132-intermediate-how-many-evaluations-are-in-8-trajectories-4-turns-3-shapes",
+    "chapter": "Kernel rewards and multi-turn learning pipelines"
+  },
+  {
+    "id": "13.3",
+    "difficulty": "Advanced",
+    "title": "Should compiler-error tool messages be trained as policy actions?",
+    "url": "13-kernel-learning-pipelines.html#133-advanced-should-compiler-error-tool-messages-be-trained-as-policy-actions",
+    "chapter": "Kernel rewards and multi-turn learning pipelines"
+  },
+  {
+    "id": "13.4",
+    "difficulty": "Advanced",
+    "title": "Is changing only seeds an adequate held-out split?",
+    "url": "13-kernel-learning-pipelines.html#134-advanced-is-changing-only-seeds-an-adequate-held-out-split",
+    "chapter": "Kernel rewards and multi-turn learning pipelines"
+  },
+  {
+    "id": "13.5",
+    "difficulty": "Advanced",
+    "title": "Why can faster evaluation fail to accelerate learning?",
+    "url": "13-kernel-learning-pipelines.html#135-advanced-why-can-faster-evaluation-fail-to-accelerate-learning",
+    "chapter": "Kernel rewards and multi-turn learning pipelines"
+  },
+  {
+    "id": "14.1",
+    "difficulty": "Intermediate",
+    "title": "What does fast_p tell me that an average speedup does not?",
+    "url": "14-reading-papers-and-tools.html#141-intermediate-what-does-fast_p-tell-me-that-an-average-speedup-does-not",
+    "chapter": "Reading papers and choosing public tools"
+  },
+  {
+    "id": "14.2",
+    "difficulty": "Advanced",
+    "title": "How should I study a kernel evaluation service such as KernelGYM?",
+    "url": "14-reading-papers-and-tools.html#142-advanced-how-should-i-study-a-kernel-evaluation-service-such-as-kernelgym",
+    "chapter": "Reading papers and choosing public tools"
+  },
+  {
+    "id": "14.3",
+    "difficulty": "Intermediate",
+    "title": "What should a paper comparison table record?",
+    "url": "14-reading-papers-and-tools.html#143-intermediate-what-should-a-paper-comparison-table-record",
+    "chapter": "Reading papers and choosing public tools"
+  },
+  {
+    "id": "15.1",
+    "difficulty": "Intermediate",
+    "title": "Estimate FLOPs and ideal traffic for a 4096³ BF16 GEMM.",
+    "url": "15-worked-examples-and-design.html#151-intermediate-estimate-flops-and-ideal-traffic-for-a-40963-bf16-gemm",
+    "chapter": "Worked estimates, code review, and system design"
+  },
+  {
+    "id": "15.2",
+    "difficulty": "Advanced",
+    "title": "What assumptions does a full-mask warp reduction need?",
+    "url": "15-worked-examples-and-design.html#152-advanced-what-assumptions-does-a-full-mask-warp-reduction-need",
+    "chapter": "Worked estimates, code review, and system design"
+  },
+  {
+    "id": "15.3",
+    "difficulty": "Advanced",
+    "title": "A kernel is slower than expected. What is your investigation order?",
+    "url": "15-worked-examples-and-design.html#153-advanced-a-kernel-is-slower-than-expected-what-is-your-investigation-order",
+    "chapter": "Worked estimates, code review, and system design"
+  },
+  {
+    "id": "15.4",
+    "difficulty": "Advanced",
+    "title": "Design a kernel evaluation service.",
+    "url": "15-worked-examples-and-design.html#154-advanced-design-a-kernel-evaluation-service",
+    "chapter": "Worked estimates, code review, and system design"
+  },
+  {
+    "id": "15.5",
+    "difficulty": "Advanced",
+    "title": "Online token latency suddenly spikes. What do you inspect?",
+    "url": "15-worked-examples-and-design.html#155-advanced-online-token-latency-suddenly-spikes-what-do-you-inspect",
+    "chapter": "Worked estimates, code review, and system design"
+  }
+]

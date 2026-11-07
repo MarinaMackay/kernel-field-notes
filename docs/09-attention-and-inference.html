@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Attention, KV caches, and inference · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="active" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 09 / 15 <span>6 answered questions</span></div><h1 id="attention-kv-caches-and-inference">Attention, KV caches, and inference</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>Prefill processes prompt tokens; autoregressive decode adds new tokens over successive steps. Their matrix shapes and data reuse differ, so their bottlenecks depend on batch, sequence length, implementation, and hardware. Small-batch decode often exposes weight/KV bandwidth; this is a workload tendency, not a law for every configuration.</p>
+<p>A KV cache stores attention keys and values. For a conventional cache, bytes are approximately <code>2 × batch × tokens × layers × KV_heads × head_dim × bytes_per_element</code>. GQA shares KV heads among groups of query heads; MQA uses one KV head. Prefix caching reuses compatible previously computed prefix state. Paging changes allocation and addressing; quantization changes storage and numerical behavior.</p>
+<p>FlashAttention tiles attention and maintains online normalization to reduce intermediate HBM traffic. PagedAttention addresses KV-cache memory management and access. They solve different problems and compatible implementations can combine their ideas. Continuous batching lets completed requests leave and new work enter between scheduling steps; chunked prefill partitions long prompt work.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="091-foundation-flashattention-or-pagedattentionwhich-one-replaces-the-other">09.1 · Foundation · FlashAttention or PagedAttention—which one replaces the other?</h3>
+<p><strong>Before you answer — Compare the resource being optimized.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Neither is a general replacement. FlashAttention targets the IO behavior of attention computation; PagedAttention uses block-based KV storage and mapping to reduce allocation waste and enable flexible reuse. An inference stack can use both.</p>
+<p><strong>Common mistake:</strong> Calling both simply the same attention speedup.</p>
+</details>
+<h3 id="092-intermediate-estimate-kv-storage-for-32-layers-8-kv-heads-head_dim128-and-bf16">09.2 · Intermediate · Estimate KV storage for 32 layers, 8 KV heads, head_dim=128, and BF16.</h3>
+<p><strong>Before you answer — The KV formula needs KV heads, not query heads.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Per token per sequence: <code>2 × 32 × 8 × 128 × 2 = 131072 bytes = 128 KiB</code>. At 8192 tokens this is 1 GiB; 32 such sequences require 32 GiB of tensor payload. Allocation slack, metadata, quantization scales, and sharding can change actual per-device storage.</p>
+<p><strong>Common mistake:</strong> Using the number of query heads for a GQA model or confusing GB with GiB.</p>
+</details>
+<h3 id="093-advanced-derive-the-online-softmax-update">09.3 · Advanced · Derive the online softmax update.</h3>
+<p><strong>Before you answer — A running normalizer must rescale when its reference maximum changes.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Let old maximum be <code>m</code>, old sum be <code>l = sum_old exp(x-m)</code>, and new block maximum be <code>m_b</code>. Set <code>m_new = max(m,m_b)</code>. Then <code>l_new = exp(m-m_new)*l + sum_block exp(x-m_new)</code>. The first factor expresses the old sum in the new coordinate system. Attention also rescales its accumulated weighted-value numerator. Producing every standalone softmax probability still requires retaining inputs or another pass; a running normalizer alone does not output all probabilities immediately.</p>
+<p><strong>Common mistake:</strong> Claiming that maintaining max and sum alone emits every normalized output in one streaming pass.</p>
+</details>
+<h3 id="094-intermediate-what-does-16-gb-of-weights-divided-by-335-tbs-tell-us">09.4 · Intermediate · What does 16 GB of weights divided by 3.35 TB/s tell us?</h3>
+<p><strong>Before you answer — A bandwidth bound is a model, not a measured prediction.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>It gives about 4.78 ms for that traffic under an illustrative ideal-bandwidth assumption. It excludes KV traffic, other operations, launch/communication costs, and inefficiency; cache reuse or changed traffic can alter the model. It is not an observed token latency or a guaranteed speed after quantization.</p>
+<p><strong>Common mistake:</strong> Promising a 4× end-to-end speedup from 4× smaller weight storage.</p>
+</details>
+<h3 id="095-intermediate-why-separate-prefill-and-decode-or-use-speculative-decoding">09.5 · Intermediate · Why separate prefill and decode, or use speculative decoding?</h3>
+<p><strong>Before you answer — Scheduling changes affect both waiting time and interference.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Disaggregation can reduce interference but adds KV transfer and coordination costs. Speculation uses a draft proposal and a target verification procedure to accept multiple tokens; preservation of the target distribution requires the appropriate exact acceptance/correction algorithm. Neither method is automatically beneficial for every workload.</p>
+<p><strong>Common mistake:</strong> Assuming any draft-and-accept shortcut preserves the original model distribution.</p>
+</details>
+<h3 id="096-foundation-are-gqa-mqa-and-prefix-caching-the-same-idea">09.6 · Foundation · Are GQA, MQA, and prefix caching the same idea?</h3>
+<p><strong>Before you answer — Head sharing changes model/cache structure; prefix reuse changes which existing computation can be reused.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>MQA uses a single KV head shared across query heads. GQA uses multiple KV heads, each shared by a group of query heads. Prefix caching reuses compatible cached state for a previously computed matching prefix; it is not a head-sharing architecture. Cache validity depends on the model and execution context, not only matching visible text. MLA uses a different compressed latent attention representation and needs its own storage accounting.</p>
+<p><strong>Common mistake:</strong> Applying the ordinary uncompressed KV formula unchanged to every attention architecture.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://arxiv.org/abs/2205.14135">FlashAttention paper</a></li>
+<li><a href="https://arxiv.org/abs/2309.06180">PagedAttention paper</a></li>
+<li><a href="https://arxiv.org/abs/2407.08608">FlashAttention-3</a></li>
+</ul><div class="page-turn"><a href="08-queues-and-serving.html">← Previous chapter</a><a href="10-distributed-and-training.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>

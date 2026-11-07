@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reading papers and choosing public tools · Kernel Field Notes</title><meta name="description" content="A free question-led book on GPU programming, Triton, performance measurement, inference, and kernel learning.">
+<link rel="stylesheet" href="assets/book.css"><script src="assets/book.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="index.html">K<span>/</span>FN <b>Kernel Field Notes</b></a><nav aria-label="Site"><a href="index.html#question-bank">Question bank</a><a href="about.html">About & coverage</a><a href="https://github.com/MarinaMackay/kernel-field-notes">GitHub ↗</a></nav></header>
+<div class="layout"><aside><p class="eyebrow">THE FIELD GUIDE · v0.1</p><a class="start" href="index.html">Start here</a><nav aria-label="Chapters"><a class="" href="01-gpu-foundations.html"><span>01</span>GPU foundations and the memory hierarchy</a><a class="" href="02-execution-and-performance.html"><span>02</span>Threads, warps, occupancy, and performance models</a><a class="" href="03-memory-and-synchronization.html"><span>03</span>Memory access and synchronization</a><a class="" href="04-triton-and-operators.html"><span>04</span>Triton, reductions, normalization, and GEMM</a><a class="" href="05-compilers-and-graphs.html"><span>05</span>Compilation, JIT, integration, and CUDA Graphs</a><a class="" href="06-measurement-and-validation.html"><span>06</span>Measurement, streams, correctness, and profiling</a><a class="" href="07-trust-and-isolation.html"><span>07</span>Trust boundaries, isolation, and worker state</a><a class="" href="08-queues-and-serving.html"><span>08</span>Queues, scheduling, and service objectives</a><a class="" href="09-attention-and-inference.html"><span>09</span>Attention, KV caches, and inference</a><a class="" href="10-distributed-and-training.html"><span>10</span>Distributed execution and training memory</a><a class="" href="11-rl-foundations.html"><span>11</span>Reinforcement learning: concepts before formulas</a><a class="" href="12-ppo-grpo-and-variants.html"><span>12</span>PPO, GRPO, baselines, and policy lag</a><a class="" href="13-kernel-learning-pipelines.html"><span>13</span>Kernel rewards and multi-turn learning pipelines</a><a class="active" href="14-reading-papers-and-tools.html"><span>14</span>Reading papers and choosing public tools</a><a class="" href="15-worked-examples-and-design.html"><span>15</span>Worked estimates, code review, and system design</a></nav><p class="aside-note">Concepts first.<br>Questions next.<br>Understand the trade-offs.</p></aside>
+<main id="main"><div class="chapter-meta">CHAPTER 14 / 15 <span>3 answered questions</span></div><h1 id="reading-papers-and-choosing-public-tools">Reading papers and choosing public tools</h1>
+<h2 id="knowledge-first">Knowledge first</h2>
+<p>A useful reading note separates the task, workload, baseline, correctness contract, evaluation conditions, and claimed contribution. A fast result against one software baseline does not establish proximity to hardware limits. A faster isolated subkernel does not establish model-level correctness or end-to-end benefit.</p>
+<p>For agent work, distinguish the <strong>agent harness</strong> (files, tool calls, context, retries) from the <strong>evaluation harness</strong> (reference, input generation, correctness, timing, isolation, reporting). A training framework supplies orchestration and updates; it cannot infer whether a CUDA result is numerically correct without an evaluator.</p>
+<p>Start with a concrete workload and the source revision. KernelBench provides tasks for evaluating generated kernels; public competition and application-trace projects provide different workloads. CUTLASS/CuTe, CUDA, Triton, and other DSLs provide different levels of mapping control. Read the actual implementation and license before reusing code. Version-specific CLI commands and paper statistics belong in separately verified reading records.</p>
+<h2 id="questions-and-answers">Questions and answers</h2>
+<h3 id="141-intermediate-what-does-fast_p-tell-me-that-an-average-speedup-does-not">14.1 · Intermediate · What does fast_p tell me that an average speedup does not?</h3>
+<p><strong>Before you answer — A suite metric needs both a success rule and a denominator.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>It is the fraction of suite tasks that satisfy correctness and exceed a stated speedup threshold under the benchmark definition. Failed tasks remain relevant to coverage. A mean over only successful tasks can hide low success rates. Verify strictness of the threshold and baseline in the benchmark version.</p>
+<p><strong>Common mistake:</strong> Comparing fast_p across different task sets or baselines as if they were identical experiments.</p>
+</details>
+<h3 id="142-advanced-how-should-i-study-a-kernel-evaluation-service-such-as-kernelgym">14.2 · Advanced · How should I study a kernel evaluation service such as KernelGYM?</h3>
+<p><strong>Before you answer — An environment’s architecture and current API are separate claims.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Trace client request → API/queue → GPU worker → compile/check/time → result. Identify timeout ownership, process lifetime, source identity, and error categories. Then inspect a pinned revision for exact endpoints and configuration; do not rely on unversioned notes as an API reference.</p>
+<p><strong>Common mistake:</strong> Copying endpoint names and training paths from an old note without checking the current repository.</p>
+</details>
+<h3 id="143-intermediate-what-should-a-paper-comparison-table-record">14.3 · Intermediate · What should a paper comparison table record?</h3>
+<p><strong>Before you answer — A reference implementation supplies semantics, not necessarily the best baseline.</strong></p>
+<details>
+<summary>Reveal answer and common mistake</summary>
+<p>Record source/revision, date, task set, hardware and precision, baseline mode, correctness, timing/cache setup, search budget, aggregate denominator, application validation, and whether the result was independently reproduced. Mark unavailable or unverified details explicitly.</p>
+<p><strong>Common mistake:</strong> Retelling an abstract as if every number had been independently checked.</p>
+</details>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a href="https://arxiv.org/abs/2502.10517">KernelBench</a></li>
+<li><a href="https://arxiv.org/abs/2507.11948">Kevin: Multi-Turn RL for Generating CUDA Kernels</a></li>
+<li><a href="https://github.com/hkust-nlp/KernelGYM">KernelGYM</a></li>
+<li><a href="https://github.com/gpu-mode/kernelbot">GPU MODE kernelbot</a></li>
+<li><a href="https://github.com/flashinfer-ai/flashinfer-bench">FlashInfer Bench</a></li>
+<li><a href="https://github.com/NVIDIA/cutlass">CUTLASS</a></li>
+</ul><div class="page-turn"><a href="13-kernel-learning-pipelines.html">← Previous chapter</a><a href="15-worked-examples-and-design.html">Next chapter →</a></div><footer>Free to read · Educational notes, not new benchmark results · <a href="https://github.com/MarinaMackay/kernel-field-notes/blob/main/CONTRIBUTING.md">Corrections welcome</a></footer></main></div></body></html>
