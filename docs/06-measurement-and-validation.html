@@ -267,9 +267,7 @@
 </details>
 <h2 id="6-correctness-is-part-of-the-performance-claim">6. Correctness is part of the performance claim</h2>
 <p>Before timing, define what counts as the same operation. For a numerical comparison, a common form is:</p>
-<p>$$
-|y-y_{\mathrm{ref}}| \leq \mathrm{atol}+\mathrm{rtol}|y_{\mathrm{ref}}|.
-$$</p>
+<p><code>abs(y - y_ref) ≤ atol + rtol * abs(y_ref)</code></p>
 <p>This formula does not choose the tolerance for you. Base it on the dtype, operation, accumulation, and application. Near zero, absolute tolerance matters; at larger magnitudes, the relative term grows.</p>
 <p>Check supported shape, dtype, stride, layout, and boundary cases. Test tails that are not multiples of a tile, small and empty inputs when supported, sign and magnitude variation, repeated indices where relevant, and the specified NaN/Inf behavior.</p>
 <h3 id="0624-intermediate-why-isnt-one-random-input-enough">06.24 · Intermediate · Why isn't one random input enough?</h3>
@@ -311,10 +309,8 @@ $$</p>
 <details>
 <summary>Reveal answer</summary>
 <p>Start with an estimate of arithmetic intensity:</p>
-<p>$$
-AI=\frac{\mathrm{FLOPs}}{\mathrm{Bytes}}, \qquad
-P \leq \min(P_{\mathrm{peak}}, B_{\mathrm{mem}}AI).
-$$</p>
+<p><code>AI = FLOPs / Bytes</code></p>
+<p><code>performance ≤ min(peak_compute, memory_bandwidth * AI)</code></p>
 <p>Specify the precision and memory level used in that model. For illustrative FP32 vector addition, two reads and one write imply 12 useful bytes and one floating-point addition per element: AI ≈ 1/12 FLOP/byte. This suggests a bandwidth limit for large streaming inputs, not a complete model of launch overhead or cached tiny inputs.</p>
 <p>Low compute and memory utilization do not uniquely diagnose “latency-bound.” Inspect dependencies, available parallelism, launch gaps, access patterns, and the meaning of the counters. NVIDIA discusses performance analysis and its limits in the <a href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">CUDA Best Practices Guide</a>.</p>
 </details>
@@ -372,9 +368,7 @@ $$</p>
 <details>
 <summary>Reveal answer</summary>
 <p>In an illustrative 100 ms application, a 20 ms component reduced to 10 ms yields 90 ms overall: about 1.11×. Under Amdahl's simplified fixed-work assumptions,</p>
-<p>$$
-S_{\mathrm{total}}=\frac{1}{(1-f)+f/s}.
-$$</p>
+<p><code>total_speedup = 1 / ((1 - f) + f / s)</code></p>
 <p>With f = 0.2, even eliminating that component entirely caps the overall speedup at 1.25×. Real deployments can also change batching, memory pressure, communication, and scheduling, so measure end-to-end behavior as well.</p>
 </details>
 <h3 id="0638-intermediate-what-if-production-latency-suddenly-becomes-noisy">06.38 · Intermediate · What if production latency suddenly becomes noisy?</h3>

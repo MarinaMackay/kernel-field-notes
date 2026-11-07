@@ -346,9 +346,7 @@ Not necessarily. Best-of-N selection or iterative prompting can improve the sele
 
 Before timing, define what counts as the same operation. For a numerical comparison, a common form is:
 
-$$
-|y-y_{\mathrm{ref}}| \leq \mathrm{atol}+\mathrm{rtol}|y_{\mathrm{ref}}|.
-$$
+`abs(y - y_ref) ≤ atol + rtol * abs(y_ref)`
 
 This formula does not choose the tolerance for you. Base it on the dtype, operation, accumulation, and application. Near zero, absolute tolerance matters; at larger magnitudes, the relative term grows.
 
@@ -426,10 +424,9 @@ Profiling can perturb execution. Metric collection can replay work or control ca
 
 Start with an estimate of arithmetic intensity:
 
-$$
-AI=\frac{\mathrm{FLOPs}}{\mathrm{Bytes}}, \qquad
-P \leq \min(P_{\mathrm{peak}}, B_{\mathrm{mem}}AI).
-$$
+`AI = FLOPs / Bytes`
+
+`performance ≤ min(peak_compute, memory_bandwidth * AI)`
 
 Specify the precision and memory level used in that model. For illustrative FP32 vector addition, two reads and one write imply 12 useful bytes and one floating-point addition per element: AI ≈ 1/12 FLOP/byte. This suggests a bandwidth limit for large streaming inputs, not a complete model of launch overhead or cached tiny inputs.
 
@@ -537,9 +534,7 @@ Under stable long-run conditions, Little's Law relates average in-system jobs L,
 
 In an illustrative 100 ms application, a 20 ms component reduced to 10 ms yields 90 ms overall: about 1.11×. Under Amdahl's simplified fixed-work assumptions,
 
-$$
-S_{\mathrm{total}}=\frac{1}{(1-f)+f/s}.
-$$
+`total_speedup = 1 / ((1 - f) + f / s)`
 
 With f = 0.2, even eliminating that component entirely caps the overall speedup at 1.25×. Real deployments can also change batching, memory pressure, communication, and scheduling, so measure end-to-end behavior as well.
 
